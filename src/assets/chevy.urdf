@@ -1,0 +1,175 @@
+<?xml version="1.0"?>
+
+<robot name="Chevy">
+
+    <link name="world">
+    </link>
+
+    <link name="body">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <mass value="1000" />
+            <!-- TODO Calculate this correclty. And for lower COM"-->
+            <inertia ixx="4166.67" ixy="0" ixz="0" iyy="10416.67" iyz="0" izz="10416.67" />
+        </inertial>
+        <visual>
+            <origin xyz="7.25 -2.45 0" rpy="0 0 1.57" />
+            <geometry>
+                <mesh filename="package://assets/meshes/body_all.dae"/>
+            </geometry>
+        </visual>
+        <collision name="body_bounding_box">
+            <origin xyz="0 0 0.05" rpy="0 0 0" />
+            <geometry>
+                <box size="13.2 5.7 5.3" />
+            </geometry>
+        </collision>
+    </link>
+
+    <!--
+    <link name="body_box">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <box size="13.2 5.7 5.3" />
+            </geometry>
+            <material name="green">
+	            <color rgba="0.1 0.5 0.05 0.5" />
+            </material>
+        </visual>
+    </link>
+    -->
+    <link name="grill">
+        <visual>
+            <origin xyz="-0.20 0.65 -0.55" rpy="0 0 1.57"/>
+            <geometry>
+                <mesh filename="package://assets/meshes/front.dae"/>
+            </geometry>
+        </visual>
+    </link>
+    <link name="floor">
+        <visual>
+            <geometry>
+                <box size="12.5 4.7 1.10"/>
+            </geometry>
+            <material name="grey">
+                <color rgba="0.3 0.3 0.3 1"/>
+            </material>
+        </visual>
+    </link>
+
+    <joint name="body_to_world" type="floating">
+        <parent link="world" />
+        <child link="body" />
+        <origin xyz="0 0 2.6"/>
+    </joint>
+
+    <joint name="grill_to_body" type="fixed">
+        <parent link="body"/>
+        <child link="grill"/>
+        <origin xyz="7 0 0"/>
+    </joint>
+    
+    <joint name="floor_to_body" type="fixed">
+        <parent link="body"/>
+        <child link="floor"/>
+        <origin xyz="0 0 0.0" rpy="0 0.02 0"/>
+    </joint>
+
+    <link name="wheel_front_left">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <mass value="30" />
+            <inertia ixx="10.4812" ixy="0" ixz="0" iyy="10.48125" iyz="0" izz="18.15" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="1.57 0 0" />
+            <geometry>
+                <mesh filename="package://assets/meshes/wheel.obj" scale="0.107 0.107 0.107"/>
+                <!--<cylinder length="0.75" radius="1.1" />-->
+            </geometry>
+            <material name="black">
+                <color rgba="0.2 0.2 0.21 1" />
+            </material>
+        </visual>
+    </link>
+
+    <link name="wheel_front_right">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <mass value="30" />
+            <inertia ixx="10.4812" ixy="0" ixz="0" iyy="10.48125" iyz="0" izz="18.15" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="1.57 0 0" />
+            <geometry>
+                <mesh filename="package://assets/meshes/wheel.obj" scale="0.107 0.107 0.107"/>
+                <!--<cylinder length="0.75" radius="1.1" />-->
+            </geometry>
+            <material name="black">
+                <color rgba="0.2 0.2 0.21 1" />
+            </material>
+        </visual>
+    </link>
+
+    <link name="wheel_rear_left">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <mass value="30" />
+            <inertia ixx="10.4812" ixy="0" ixz="0" iyy="10.48125" iyz="0" izz="18.15" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="1.57 0 0" />
+            <geometry>
+                <mesh filename="package://assets/meshes/wheel.obj" scale="0.107 0.107 0.107"/>
+                <!--<cylinder length="0.75" radius="1.1" />-->
+            </geometry>
+            <material name="black">
+                <color rgba="0.2 0.2 0.21 1" />
+            </material>
+        </visual>
+    </link>
+
+    <link name="wheel_rear_right">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <mass value="30" />
+            <inertia ixx="10.4812" ixy="0" ixz="0" iyy="10.48125" iyz="0" izz="18.15" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="1.57 0 0" />
+            <geometry>
+                <mesh filename="package://assets/meshes/wheel.obj" scale="0.107 0.107 0.107"/>
+                <!--<cylinder length="0.75" radius="1.1" />-->
+            </geometry>
+            <material name="black">
+                <color rgba="0.2 0.2 0.21 1" />
+            </material>
+        </visual>
+    </link>
+
+    <joint name="axle_front_left" type="continuous">
+        <parent link="body" />
+        <child link="wheel_front_left" />
+        <origin xyz="4.25 2.5 -1.5" rpy="1.57 0 0"/>
+        <axis xyz="1 0 0" />
+    </joint>
+    <joint name="axle_front_right" type="continuous">
+        <parent link="body" />
+        <child link="wheel_front_right" />
+        <origin xyz="4.25 -2.5 -1.5" rpy="1.57 0 0"/>
+        <axis xyz="1 0 0" />
+    </joint>
+    <joint name="axle_rear_left" type="continuous">
+        <parent link="body" />
+        <child link="wheel_rear_left" />
+        <origin xyz="-3.5 2.5 -1.5" rpy="1.57 0 0"/>
+        <axis xyz="1 0 0" />
+    </joint>
+    <joint name="axle_rear_right" type="continuous">
+        <parent link="body" />
+        <child link="wheel_rear_right" />
+        <origin xyz="-3.5 -2.5 -1.5" rpy="1.57 0 0"/>
+        <axis xyz="1 0 0" />
+    </joint>
+</robot>
