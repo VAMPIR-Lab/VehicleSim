@@ -88,7 +88,7 @@ function simulate(vis, urdf_filename)
 
 end
 
-function solve(callbacks, x1, x2, v1, v2, q1, q2, ω1, ω2, F1, r01, F2, r02)
+function solve_old(callbacks, x1, x2, v1, v2, q1, q2, ω1, ω2, F1, r01, F2, r02)
     wrapper_f = function(z)
         callbacks.full_cost_fn(z, [x1; v1; q1; ω1; x2; v2; q2; ω2; F1; r01; F2; r02])
     end

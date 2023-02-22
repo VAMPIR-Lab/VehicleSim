@@ -2,9 +2,19 @@
 
 <robot name="Chevy">
 
+    <!--   LINKS   -->
+
     <link name="world">
     </link>
 
+    <!--link name="road">
+        <visual>
+            <geometry>
+                <mesh filename="package://assets/meshes/roads_kit.obj" scale="1 1 1"/>
+            </geometry>
+        </visual>
+    </link-->
+    
     <link name="body">
         <inertial>
             <origin xyz="0 0 0" rpy="0 0 0" />
@@ -26,19 +36,6 @@
         </collision>
     </link>
 
-    <!--
-    <link name="body_box">
-        <visual>
-            <origin xyz="0 0 0" rpy="0 0 0" />
-            <geometry>
-                <box size="13.2 5.7 5.3" />
-            </geometry>
-            <material name="green">
-	            <color rgba="0.1 0.5 0.05 0.5" />
-            </material>
-        </visual>
-    </link>
-    -->
     <link name="grill">
         <visual>
             <origin xyz="-0.20 0.65 -0.55" rpy="0 0 1.57"/>
@@ -47,34 +44,89 @@
             </geometry>
         </visual>
     </link>
+
     <link name="floor">
+        <!-- TODO make most of vehicle mass be in here? -->
         <visual>
             <geometry>
                 <box size="12.5 4.7 1.10"/>
             </geometry>
             <material name="grey">
-                <color rgba="0.3 0.3 0.3 1"/>
+                <color rgba="0.8 0.8 0.8 1"/>
             </material>
         </visual>
     </link>
 
-    <joint name="body_to_world" type="floating">
-        <parent link="world" />
-        <child link="body" />
-        <origin xyz="0 0 2.6"/>
-    </joint>
+    <link name="front_axle_mount"/>
 
-    <joint name="grill_to_body" type="fixed">
-        <parent link="body"/>
-        <child link="grill"/>
-        <origin xyz="7 0 0"/>
-    </joint>
+    <link name="front_axle">
+        <visual>
+            <geometry>
+                <cylinder radius="0.25" length="4.6"/>
+            </geometry>
+            <material name="grey">
+                <color rgba="0.3 0.3 0.3 1"/>
+            </material>
+        </visual>
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="8.0"/>
+            <!--inertia ixx=iyy=1/12 * m * ( 3r^2 + h^2) izz=1/2*m*r^2     -->
+            <inertia ixx="14.2316666667" iyy="14.2316666667" ixy="0.0" ixz="0.0" izz="0.25" iyz="0.0"/>
+        </inertial>
+    </link>
     
-    <joint name="floor_to_body" type="fixed">
-        <parent link="body"/>
-        <child link="floor"/>
-        <origin xyz="0 0 0.0" rpy="0 0.02 0"/>
-    </joint>
+    <link name="rear_axle_mount"/>
+
+    <link name="rear_axle">
+        <visual>
+            <geometry>
+                <cylinder radius="0.25" length="5.0"/>
+            </geometry>
+            <material name="grey">
+                <color rgba="0.3 0.3 0.3 1"/>
+            </material>
+        </visual>
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="10.0"/>
+            <!--inertia ixx=iyy=1/12 * m * ( 3r^2 + h^2) izz=1/2*m*r^2     -->
+            <inertia ixx="20.9895833333" iyy="20.9895833333" ixy="0.0" ixz="0.0" izz="0.3125" iyz="0.0"/>
+        </inertial>
+    </link>
+
+    <link name="front_left_steering_linkage">
+        <visual>
+            <geometry>
+                <cylinder radius="0.25" length="0.2"/>
+            </geometry>
+            <material name="grey">
+                <color rgba="0.3 0.3 0.3 1"/>
+            </material>
+        </visual>
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="1.0"/>
+            <!--inertia ixx=iyy=1/12 * m * ( 3r^2 + h^2) izz=1/2*m*r^2     -->
+            <inertia ixx="0.01895833333" iyy="0.01895833333" ixy="0.0" ixz="0.0" izz="0.02" iyz="0.0"/>
+        </inertial>
+    </link>
+    <link name="front_right_steering_linkage">
+        <visual>
+            <geometry>
+                <cylinder radius="0.25" length="0.2"/>
+            </geometry>
+            <material name="grey">
+                <color rgba="0.3 0.3 0.3 1"/>
+            </material>
+        </visual>
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="1.0"/>
+            <!--inertia ixx=iyy=1/12 * m * ( 3r^2 + h^2) izz=1/2*m*r^2     -->
+            <inertia ixx="0.01895833333" iyy="0.01895833333" ixy="0.0" ixz="0.0" izz="0.02" iyz="0.0"/>
+        </inertial>
+    </link>
 
     <link name="wheel_front_left">
         <inertial>
@@ -148,28 +200,105 @@
         </visual>
     </link>
 
-    <joint name="axle_front_left" type="continuous">
-        <parent link="body" />
+    <!--   JOINTS  -->
+
+    <joint name="world_to_body" type="floating">
+        <parent link="world" />
+        <child link="body" />
+        <origin xyz="0 0 2.6"/>
+    </joint>
+
+    <!--joint name="world_to_road" type="fixed">
+        <parent link="world" />
+        <child link="road" />
+        <origin xyz="0 -150 0" rpy="1.57 0 0"/>
+    </joint-->
+    
+    <joint name="body_to_grill" type="fixed">
+        <parent link="body"/>
+        <child link="grill"/>
+        <origin xyz="7 0 0"/>
+    </joint>
+    
+    <joint name="body_to_floor" type="fixed">
+        <parent link="body"/>
+        <child link="floor"/>
+        <origin xyz="0 0 0.0" rpy="0 0.02 0"/>
+    </joint>
+    
+    <joint name="body_to_front_axle_mount" type="prismatic">
+        <parent link="body"/>
+        <child link="front_axle_mount"/>
+        <origin xyz="4.25 0 -1.5" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+        <limit lower="-1.0" upper="0.25"/>
+    </joint>
+
+    <joint name="body_to_rear_axle_mount" type="prismatic">
+        <parent link="body"/>
+        <child link="rear_axle_mount"/>
+        <origin xyz="-3.5 0 -1.5" rpy="0 0 0"/>
+        <axis xyz="0 0 1.0"/>
+        <limit lower="-1.0" upper="0.25"/>
+    </joint>
+
+    <joint name="mount_to_front_axle" type="revolute">
+        <parent link="front_axle_mount"/>
+        <child link="front_axle"/>
+        <origin xyz="0 0 0" rpy="1.57 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-0.4" upper="0.4"/>
+    </joint>
+
+    <joint name="mount_to_rear_axle" type="revolute">
+        <parent link="rear_axle_mount"/>
+        <child link="rear_axle"/>
+        <origin xyz="0 0 0" rpy="1.57 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-0.4" upper="0.4"/>
+    </joint>
+    
+    <joint name="front_axle_to_left_linkage" type="revolute">
+        <parent link="front_axle"/>
+        <child link="front_left_steering_linkage"/>
+        <origin xyz="0 0 2.3" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-0.6" upper="0.6"/>
+    </joint>
+
+    <joint name="front_axle_to_right_linkage" type="revolute">
+        <parent link="front_axle"/>
+        <child link="front_right_steering_linkage"/>
+        <origin xyz="0 0 -2.3" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-0.6" upper="0.6"/>
+    </joint>
+
+    <joint name="front_linkage_to_left_wheel" type="continuous">
+        <parent link="front_left_steering_linkage" />
         <child link="wheel_front_left" />
-        <origin xyz="4.25 2.5 -1.5" rpy="1.57 0 0"/>
-        <axis xyz="1 0 0" />
+        <origin xyz="0 0 0.2" rpy="0 0 0"/>
+        <axis xyz="0 0 1" />
     </joint>
-    <joint name="axle_front_right" type="continuous">
-        <parent link="body" />
+
+    <joint name="front_linkage_to_right_wheel" type="continuous">
+        <parent link="front_right_steering_linkage" />
         <child link="wheel_front_right" />
-        <origin xyz="4.25 -2.5 -1.5" rpy="1.57 0 0"/>
-        <axis xyz="1 0 0" />
+        <origin xyz="0 0 -0.2" rpy="0 0 0"/>
+        <axis xyz="0 0 1" />
     </joint>
-    <joint name="axle_rear_left" type="continuous">
-        <parent link="body" />
+
+    <joint name="rear_axle_to_left_wheel" type="continuous">
+        <parent link="rear_axle" />
         <child link="wheel_rear_left" />
-        <origin xyz="-3.5 2.5 -1.5" rpy="1.57 0 0"/>
-        <axis xyz="1 0 0" />
+        <origin xyz="0 0 2.5" rpy="0 0 0"/>
+        <axis xyz="0 0 1" />
     </joint>
-    <joint name="axle_rear_right" type="continuous">
-        <parent link="body" />
+
+    <joint name="rear_axle_to_right_wheel" type="continuous">
+        <parent link="rear_axle" />
         <child link="wheel_rear_right" />
-        <origin xyz="-3.5 -2.5 -1.5" rpy="1.57 0 0"/>
-        <axis xyz="1 0 0" />
+        <origin xyz="0 0 -2.5" rpy="0 0 0"/>
+        <axis xyz="0 0 1" />
     </joint>
 </robot>
