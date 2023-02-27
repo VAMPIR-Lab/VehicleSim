@@ -20,4 +20,4 @@ include("sim.jl")
 
 export view_car, sim_car, simulate, test_simulate, get_vis, car_sim_server, CarConfig
 
-end # module VehicleSim
+end

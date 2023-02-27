@@ -4,9 +4,6 @@
 
     <!--   LINKS   -->
 
-    <link name="world">
-    </link>
-
     <!--link name="road">
         <visual>
             <geometry>
@@ -201,12 +198,6 @@
     </link>
 
     <!--   JOINTS  -->
-
-    <joint name="world_to_body" type="floating">
-        <parent link="world" />
-        <child link="body" />
-        <origin xyz="0 0 2.6"/>
-    </joint>
 
     <!--joint name="world_to_road" type="fixed">
         <parent link="world" />
