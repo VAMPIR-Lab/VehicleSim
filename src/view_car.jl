@@ -57,6 +57,25 @@ function view_car(vis)
     delete!(vis["/Axes"])
     urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
     chevy = parse_urdf(urdf_path, floating=true)
+    origin = RigidBodyDynamics.Point3D(bodies(chevy)[1].frame_definitions[1].from, [0.0,0,0])
+    one_up = RigidBodyDynamics.Point3D(bodies(chevy)[1].frame_definitions[1].from, [0.0,0,1.0])
+    dir_up = RigidBodyDynamics.FreeVector3D(one_up)
+
+    hs = RigidBodyDynamics.HalfSpace3D(origin, dir_up)
+    RigidBodyDynamics.add_environment_primitive!(chevy, hs)
+
+    # define frictionless contact point on wheel origins (will need to change
+    # this for sloped surfaces   
+    zero_friction_model = RigidBodyDynamics.ViscoelasticCoulombModel{Float64}(0,1.0,1.0)
+    normal_contact_model = RigidBodyDynamics.hunt_crossley_hertz() # investigate parameters if penetrating
+    soft_contact_model = RigidBodyDynamics.SoftContactModel(normal_contact_model, zero_friction_model)
+
+    for body in bodies(chevy)[9:12]
+        frame = body.frame_definitions[1].from
+        pt = RigidBodyDynamics.Point3D(frame, SVector(0.0,0,0))
+        contact_point = RigidBodyDynamics.ContactPoint(pt, soft_contact_model)
+        RigidBodyDynamics.add_contact_point!(body, contact_point)
+    end
 
     state = MechanismState(chevy)
     
@@ -65,11 +84,12 @@ function view_car(vis)
     mvis = MechanismVisualizer(chevy, chevy_visuals, vis)
 
     all_joints = joints(chevy)
-
+    config = CarConfig(SVector(0.0,0,1.499), 0.0, 0.0, 0.0, 0.0, 0.0)
+    configure_car!(mvis, state, all_joints, config)
     @infiltrate
 
-    config = CarConfig(SVector(10.0,20,2.6), 0.04, 0.0, -0.2, 0.1, 0.1)
-    configure_car!(mvis, state, all_joints, config)
+    ts, qs, vs = RigidBodyDynamics.simulate(state, 10.0)
+
 end
 
 struct CarConfig
