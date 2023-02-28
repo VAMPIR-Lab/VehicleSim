@@ -220,17 +220,15 @@
     <joint name="body_to_front_axle_mount" type="prismatic">
         <parent link="body"/>
         <child link="front_axle_mount"/>
-        <origin xyz="4.25 0 -1.5" rpy="0 0 0"/>
+        <origin xyz="4.25 0 -2.25" rpy="0 0 0"/>
         <axis xyz="0 0 1"/>
-        <limit lower="-1.0" upper="0.25"/>
     </joint>
 
     <joint name="body_to_rear_axle_mount" type="prismatic">
         <parent link="body"/>
         <child link="rear_axle_mount"/>
-        <origin xyz="-3.5 0 -1.5" rpy="0 0 0"/>
+        <origin xyz="-3.5 0 -2.35" rpy="0 0 0"/>
         <axis xyz="0 0 1.0"/>
-        <limit lower="-1.0" upper="0.25"/>
     </joint>
 
     <joint name="mount_to_front_axle" type="revolute">
