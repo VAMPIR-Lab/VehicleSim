@@ -37,21 +37,28 @@ function configure_car!(mvis, state, joints, config)
     set_configuration!(mvis, configuration(state))
 end
 
-function suspension_control!(torques::AbstractVector, t, state::MechanismState; k₁=-6500.0, k₂=-3000.0, k₃ = -12500.0, k₄=-5000.0)
+function steering_control!(torques::AbstractVector, t, state::MechanismState; reference_angle=0.0, k₁=-6500.0, k₂=-2500.0)
+    js = joints(state.mechanism)
+    linkage_left = js[6]
+    linkage_right = js[7]
+
+    torques[velocity_range(state, linkage_left)] .= k₁ * (configuration(state, linkage_left) .- reference_angle) + k₂ * velocity(state, linkage_left)
+    torques[velocity_range(state, linkage_right)] .= k₁ * (configuration(state, linkage_right) .- reference_angle) + k₂ * velocity(state, linkage_right)
+end
+
+function suspension_control!(torques::AbstractVector, t, state::MechanismState; k₁=-6500.0, k₂=-2500.0, k₃ = -12500.0, k₄=-5000.0, reference_angle=0.0)
     js = joints(state.mechanism)
     front_axle_mount = js[2]
     rear_axle_mount = js[3]
     front_axle_roll = js[4]
     rear_axle_roll = js[5]
-    linkage_left = js[6]
-    linkage_right = js[7]
 
     torques[velocity_range(state, front_axle_mount)] .= k₁ * configuration(state, front_axle_mount) + k₂ * velocity(state, front_axle_mount)
     torques[velocity_range(state, rear_axle_mount)] .= k₁ * configuration(state, rear_axle_mount) + k₂ * velocity(state, rear_axle_mount)
     torques[velocity_range(state, front_axle_roll)] .= k₃ * configuration(state, front_axle_roll) + k₄ * velocity(state, front_axle_roll)
     torques[velocity_range(state, rear_axle_roll)] .= k₃ * configuration(state, rear_axle_roll) + k₄ * velocity(state, rear_axle_roll)
-    torques[velocity_range(state, linkage_left)] .= k₁ * configuration(state, linkage_left) + k₂ * velocity(state, linkage_left)
-    torques[velocity_range(state, linkage_right)] .= k₁ * configuration(state, linkage_right) + k₂ * velocity(state, linkage_right)
+    
+
 end
 
 function view_car(vis)
@@ -87,11 +94,20 @@ function view_car(vis)
     mvis = MechanismVisualizer(chevy, chevy_visuals, vis)
 
     all_joints = joints(chevy)
-    config = CarConfig(SVector(0.0,0,5.499), 0.05, -0.2, 0.0, 0.0)
+    config = CarConfig(SVector(0.0,0,2.5), 0.0, 0.0, 0.0, 0.0)
     configure_car!(mvis, state, all_joints, config)
-    ts, qs, vs = RigidBodyDynamics.simulate(state, 5.0, suspension_control!)
-    MeshCatMechanisms.animate(mvis, ts, qs; realtimerate=1.0)
 
+    reference_angle = 0.5
+
+    control! = (torques, t, state) -> begin
+        torques .= 0.0
+        steering_control!(torques, t, state; reference_angle)
+        suspension_control!(torques, t, state)
+    end
+
+    ts, qs, vs = RigidBodyDynamics.simulate(state, 5.0, control!)
+    MeshCatMechanisms.animate(mvis, ts, qs; realtimerate=1.0)
+    display(qs[end])
 end
 
 struct CarConfig
