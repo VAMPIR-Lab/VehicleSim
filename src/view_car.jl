@@ -46,7 +46,7 @@ function steering_control!(torques::AbstractVector, t, state::MechanismState; re
     torques[velocity_range(state, linkage_right)] .= k₁ * (configuration(state, linkage_right) .- reference_angle) + k₂ * velocity(state, linkage_right)
 end
 
-function suspension_control!(torques::AbstractVector, t, state::MechanismState; k₁=-6500.0, k₂=-2500.0, k₃ = -12500.0, k₄=-5000.0, reference_angle=0.0)
+function suspension_control!(torques::AbstractVector, t, state::MechanismState; k₁=-6500.0, k₂=-2500.0, k₃ = -17500.0, k₄=-5000.0)
     js = joints(state.mechanism)
     front_axle_mount = js[2]
     rear_axle_mount = js[3]
@@ -57,14 +57,12 @@ function suspension_control!(torques::AbstractVector, t, state::MechanismState; 
     torques[velocity_range(state, rear_axle_mount)] .= k₁ * configuration(state, rear_axle_mount) + k₂ * velocity(state, rear_axle_mount)
     torques[velocity_range(state, front_axle_roll)] .= k₃ * configuration(state, front_axle_roll) + k₄ * velocity(state, front_axle_roll)
     torques[velocity_range(state, rear_axle_roll)] .= k₃ * configuration(state, rear_axle_roll) + k₄ * velocity(state, rear_axle_roll)
-    
-
 end
 
-function view_car(vis)
+function view_car(vis; max_realtime_rate=1.0)
     delete!(vis)
-    delete!(vis["/Grid"])
-    delete!(vis["/Axes"])
+    #delete!(vis["/Grid"])
+    #delete!(vis["/Axes"])
     urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
     chevy = parse_urdf(urdf_path, floating=true)
     origin = RigidBodyDynamics.Point3D(bodies(chevy)[1].frame_definitions[1].from, [0.0,0,0])
@@ -80,14 +78,32 @@ function view_car(vis)
     normal_contact_model = RigidBodyDynamics.hunt_crossley_hertz() # investigate parameters if penetrating
     soft_contact_model = RigidBodyDynamics.SoftContactModel(normal_contact_model, zero_friction_model)
 
-    for body in bodies(chevy)[9:12]
-        frame = body.frame_definitions[1].from
-        pt = RigidBodyDynamics.Point3D(frame, SVector(0.0,0,0))
+    axle = bodies(chevy)[6] 
+    for frame_id in 2:3
+        frame = axle.frame_definitions[frame_id].from
+        pt = RigidBodyDynamics.Point3D(frame, SVector(0.0,-1.25,0))
         contact_point = RigidBodyDynamics.ContactPoint(pt, soft_contact_model)
-        RigidBodyDynamics.add_contact_point!(body, contact_point)
+        RigidBodyDynamics.add_contact_point!(axle, contact_point)
+    end
+    for (link_id, offset) in zip((7,8), (0.2,-0.2))
+        link = bodies(chevy)[link_id]
+        frame = link.frame_definitions[2].from
+        pt = RigidBodyDynamics.Point3D(frame, SVector(0.0,-1.25,offset))
+        contact_point = RigidBodyDynamics.ContactPoint(pt, soft_contact_model)
+        RigidBodyDynamics.add_contact_point!(link, contact_point)
     end
 
+
     state = MechanismState(chevy)
+
+    wheel_angular_vel = 3.0
+    drive_force = 2000.0
+    steering_angle = 0.5
+
+    for jid in 8:11
+        wheel_joint = joints(chevy)[jid]
+        set_velocity!(state, wheel_joint, -wheel_angular_vel)
+    end
     
     chevy_visuals = URDFVisuals(urdf_path, package_path=[dirname(pathof(VehicleSim))])
     
@@ -97,17 +113,32 @@ function view_car(vis)
     config = CarConfig(SVector(0.0,0,2.5), 0.0, 0.0, 0.0, 0.0)
     configure_car!(mvis, state, all_joints, config)
 
-    reference_angle = 0.5
 
     control! = (torques, t, state) -> begin
         torques .= 0.0
-        steering_control!(torques, t, state; reference_angle)
+        steering_control!(torques, t, state; reference_angle=steering_angle)
         suspension_control!(torques, t, state)
     end
 
-    ts, qs, vs = RigidBodyDynamics.simulate(state, 5.0, control!)
-    MeshCatMechanisms.animate(mvis, ts, qs; realtimerate=1.0)
-    display(qs[end])
+
+    @infiltrate
+    wrenches! = (bodyid_to_wrench, t, state) -> begin
+        RigidBodyDynamics.update_transforms!(state)
+        for i = 7:8
+            bodyid = BodyID(i)
+            wheel = bodies(chevy)[i]
+            frame = wheel.frame_definitions[1].from
+            body_to_root = transform_to_root(state, bodyid, false)
+            wrench = Wrench{Float64}(frame, [0.0,0,0], [drive_force,0,0])
+            bodyid_to_wrench[BodyID(i)] = transform(wrench, body_to_root)
+        end
+        nothing
+    end
+    
+    vehicle_simulate(state, mvis, 10.0, control!, wrenches!; max_realtime_rate)
+    #ts, qs, vs = RigidBodyDynamics.simulate(state, 5.0, control!)
+    #MeshCatMechanisms.animate(mvis, ts, qs; realtimerate=1.0)
+    #display(qs[end])
 end
 
 struct CarConfig
