@@ -37,27 +37,6 @@ function configure_car!(mvis, state, joints, config)
     set_configuration!(mvis, configuration(state))
 end
 
-function steering_control!(torques::AbstractVector, t, state::MechanismState; reference_angle=0.0, k₁=-6500.0, k₂=-2500.0)
-    js = joints(state.mechanism)
-    linkage_left = js[6]
-    linkage_right = js[7]
-
-    torques[velocity_range(state, linkage_left)] .= k₁ * (configuration(state, linkage_left) .- reference_angle) + k₂ * velocity(state, linkage_left)
-    torques[velocity_range(state, linkage_right)] .= k₁ * (configuration(state, linkage_right) .- reference_angle) + k₂ * velocity(state, linkage_right)
-end
-
-function suspension_control!(torques::AbstractVector, t, state::MechanismState; k₁=-6500.0, k₂=-2500.0, k₃ = -17500.0, k₄=-5000.0)
-    js = joints(state.mechanism)
-    front_axle_mount = js[2]
-    rear_axle_mount = js[3]
-    front_axle_roll = js[4]
-    rear_axle_roll = js[5]
-
-    torques[velocity_range(state, front_axle_mount)] .= k₁ * configuration(state, front_axle_mount) + k₂ * velocity(state, front_axle_mount)
-    torques[velocity_range(state, rear_axle_mount)] .= k₁ * configuration(state, rear_axle_mount) + k₂ * velocity(state, rear_axle_mount)
-    torques[velocity_range(state, front_axle_roll)] .= k₃ * configuration(state, front_axle_roll) + k₄ * velocity(state, front_axle_roll)
-    torques[velocity_range(state, rear_axle_roll)] .= k₃ * configuration(state, rear_axle_roll) + k₄ * velocity(state, rear_axle_roll)
-end
 
 function view_car(vis; max_realtime_rate=1.0)
     delete!(vis)
@@ -149,46 +128,5 @@ struct CarConfig
     steering_angle::Float64
 end
 
-function spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_id)
-    chevy = deepcopy(chevy_base)
-    chevy.graph.vertices[2].name="chevy_$vehicle_id"
-    state = MechanismState(chevy)
-    mvis = MechanismVisualizer(chevy, chevy_visuals, vis)
-
-    println("car_spawned")
-
-    function drive_control!(torques::AbstractVector, t, x::MechanismState)
-        0    
-    end
-
-
-    while isopen(sock)
-        car_config = Serialization.deserialize(sock)
-        configure_car!(mvis, state, chevy_joints, car_config)
-        println("updated config")
-    end
-end
-        
-
-function car_sim_server(vis=nothing, host::IPAddr = IPv4(0), port=4444)
-    if isnothing(vis)
-        vis = get_vis()
-    end
-    urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
-    chevy_base = parse_urdf(urdf_path, floating=true)
-    chevy_visuals = URDFVisuals(urdf_path, package_path=[dirname(pathof(VehicleSim))])
-    chevy_joints = joints(chevy_base)
-
-    vehicle_count = 0
-    errormonitor(@async begin
-        server = listen(host, port)
-        while true
-            sock = accept(server)
-            println("Client accepted!", sock)
-            errormonitor(
-                         @async spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_count+=1))
-        end
-    end)
-end
 
 

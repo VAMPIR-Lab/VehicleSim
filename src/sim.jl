@@ -19,4 +19,23 @@ function vehicle_simulate(state::MechanismState{X}, mvis, final_time, internal_c
     RigidBodyDynamics.integrate(integrator, final_time, Δt; max_realtime_rate)
 end
 
+function car_sim_server(vis=nothing, host::IPAddr = IPv4(0), port=4444)
+    if isnothing(vis)
+        vis = get_vis()
+    end
+    urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
+    chevy_base = parse_urdf(urdf_path, floating=true)
+    chevy_visuals = URDFVisuals(urdf_path, package_path=[dirname(pathof(VehicleSim))])
+    chevy_joints = joints(chevy_base)
 
+    vehicle_count = 0
+    errormonitor(@async begin
+        server = listen(host, port)
+        while true
+            sock = accept(server)
+            println("Client accepted!", sock)
+            errormonitor(
+                         @async spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_count+=1))
+        end
+    end)
+end

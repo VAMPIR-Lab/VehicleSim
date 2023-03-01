@@ -17,6 +17,7 @@ using Symbolics
 include("view_car.jl")
 include("objects.jl")
 include("sim.jl")
+include("control.jl")
 
 export view_car, sim_car, simulate, test_simulate, get_vis, car_sim_server, CarConfig
 
