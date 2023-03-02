@@ -52,26 +52,27 @@ function spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_i
 
     println("car_spawned")
 
-    let f = 0.0, θ = 0.0 
-        global set_reference!(cmd::VehicleCommand) = (f = cmd.forward_force; θ = cmd.steering_angle; nothing)
-        global control! = (torques, t, state) -> begin
+    f = 0.0
+    θ = 0.0
+
+    set_reference!(cmd::VehicleCommand) = (f = cmd.forward_force; θ = cmd.steering_angle; nothing)
+    control! = (torques, t, state) -> begin
             torques .= 0.0
             steering_control!(torques, t, state; reference_angle=θ)
             suspension_control!(torques, t, state)
             nothing
+    end
+    wrenches! = (bodyid_to_wrench, t, state) -> begin
+        RigidBodyDynamics.update_transforms!(state)
+        for i = 7:8
+            bodyid = BodyID(i)
+            wheel = bodies(chevy)[i]
+            frame = wheel.frame_definitions[1].from
+            body_to_root = transform_to_root(state, bodyid, false)
+            wrench = Wrench{Float64}(frame, [0.0,0,0], [f,0,0])
+            bodyid_to_wrench[BodyID(i)] = transform(wrench, body_to_root)
         end
-        global wrenches! = (bodyid_to_wrench, t, state) -> begin
-            RigidBodyDynamics.update_transforms!(state)
-            for i = 7:8
-                bodyid = BodyID(i)
-                wheel = bodies(chevy)[i]
-                frame = wheel.frame_definitions[1].from
-                body_to_root = transform_to_root(state, bodyid, false)
-                wrench = Wrench{Float64}(frame, [0.0,0,0], [f,0,0])
-                bodyid_to_wrench[BodyID(i)] = transform(wrench, body_to_root)
-            end
-            nothing
-        end
+        nothing
     end
 
     @async while isopen(sock)
@@ -79,7 +80,7 @@ function spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_i
         set_reference!(car_cmd)
     end
    
-    vehicle_simulate(state, mvis, 10.0, control!, wrenches!; max_realtime_rate)
+    vehicle_simulate(state, mvis, 10.0, control!, wrenches!; max_realtime_rate=1.0)
 end
 
 
