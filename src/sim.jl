@@ -14,12 +14,12 @@ function vehicle_simulate(state::MechanismState{X}, mvis, final_time, internal_c
         end
     end
     tableau = RigidBodyDynamics.runge_kutta_4(T)
-    sink = MeshCatMechanisms.MeshCatSink(mvis)
+    sink = FollowCamSink(mvis)
     integrator = RigidBodyDynamics.MuntheKaasIntegrator(state, closed_loop_dynamics!, tableau, sink)
     RigidBodyDynamics.integrate(integrator, final_time, Δt; max_realtime_rate)
 end
 
-function car_sim_server(vis=nothing, host::IPAddr = IPv4(0), port=4444)
+function server(vis=nothing, host::IPAddr = IPv4(0), port=4444)
     if isnothing(vis)
         vis = get_vis()
     end
@@ -29,13 +29,16 @@ function car_sim_server(vis=nothing, host::IPAddr = IPv4(0), port=4444)
     chevy_joints = joints(chevy_base)
 
     vehicle_count = 0
-    errormonitor(@async begin
+    sim_task = @async begin
         server = listen(host, port)
         while true
-            sock = accept(server)
-            println("Client accepted!", sock)
-            errormonitor(
-                         @async spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_count+=1))
+            try
+                sock = accept(server)
+                @info "Client accepted."
+                @async spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_count+=1, server)
+            catch e
+                break
+            end
         end
-    end)
+    end
 end

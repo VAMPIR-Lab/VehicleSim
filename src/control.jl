@@ -2,7 +2,11 @@ struct VehicleCommand
     steering_angle::Float64
     forward_force::Float64
     persist::Bool
+    shutdown::Bool
 end
+
+struct EndOfSimException <: Exception end
+struct EndOfVehicleException <: Exception end
 
 
 function get_c()
@@ -20,11 +24,16 @@ function keyboard_controller(host::IPAddr=IPv4(0), port=4444; f_step = 250.0, s_
     forward_force = 0.0
     steering_angle = 0.0
     persist = true
-    println("Press 'q' at any time to terminate simulation.")
-    while persist && isopen(socket)
+    shutdown = false
+    @info "Press 'q' at any time to terminate vehicle. Press 's' to shutdown simulator server."
+    while persist && !shutdown && isopen(socket)
         key = get_c()
         if key == 'q'
+            # terminate vehicle
             persist = false
+        elseif key == 's'
+            # shutdown server
+            shutdown = true
         elseif key == 'i'
             # increase forward force
             forward_force += f_step
@@ -39,32 +48,57 @@ function keyboard_controller(host::IPAddr=IPv4(0), port=4444; f_step = 250.0, s_
             steering_angle -= s_step
         end
 
-        cmd = VehicleCommand(steering_angle, forward_force, persist)
+        cmd = VehicleCommand(steering_angle, forward_force, persist, shutdown)
         
         Serialization.serialize(socket, cmd)
     end
-    close(socket)
+    #close(socket) # this should be closed by sim process
 end
 
-function spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_id)
+function delete_vehicle(vis, vehicle)
+    name = vehicle.graph.vertices[2].name
+    path = "/meshcat/world/$name"
+    delete!(vis[path])
+    open(vis)
+    setcameratarget!(vis, [0,0,0])
+    setcameraposition!(vis, [0, -3, 1])
+
+    nothing
+end
+
+function spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_id, server)
     chevy = deepcopy(chevy_base)
     chevy.graph.vertices[2].name="chevy_$vehicle_id"
     configure_contact!(chevy)
     state = MechanismState(chevy)
     mvis = MechanismVisualizer(chevy, chevy_visuals, vis)
 
-
-    
     config = CarConfig(SVector(0.0,0,2.5), 0.0, 0.0, 0.0, 0.0)
-    configure_car!(mvis, state, joints(chevy), config)
-
-    println("car_spawned")
+    configure_car_contact!(mvis, state, joints(chevy), config)
 
     f = 0.0
     θ = 0.0
-
-    set_reference!(cmd::VehicleCommand) = (f = cmd.forward_force; θ = cmd.steering_angle; nothing)
+    persist = true
+    shutdown = false
+    set_reference! = (cmd::VehicleCommand) -> begin
+        if !cmd.persist 
+            @info "Destroying vehicle."
+            close(sock)
+        end
+        if cmd.shutdown
+            @info "Shutting down server."
+            close(sock)
+        end
+            
+        f = cmd.forward_force
+        θ = cmd.steering_angle
+        shutdown=cmd.shutdown
+        persist=cmd.persist
+    end
     control! = (torques, t, state) -> begin
+            !persist && throw(EndOfVehicleException())
+            shutdown && throw(EndOfSimException())
+
             torques .= 0.0
             steering_control!(torques, t, state; reference_angle=θ)
             suspension_control!(torques, t, state)
@@ -86,9 +120,21 @@ function spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_i
     @async while isopen(sock)
         car_cmd = Serialization.deserialize(sock)
         set_reference!(car_cmd)
+    end 
+
+    try 
+        vehicle_simulate(state, 
+                         mvis, 
+                         Inf, 
+                         control!, 
+                         wrenches!; 
+                         max_realtime_rate=1.0)
+    catch e
+        delete_vehicle(vis, chevy)
+        if e isa EndOfSimException
+            close(server)
+        end
     end
-   
-    vehicle_simulate(state, mvis, 100.0, control!, wrenches!; max_realtime_rate=1.0)
 end
 
 

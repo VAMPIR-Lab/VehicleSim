@@ -18,7 +18,8 @@ include("view_car.jl")
 include("objects.jl")
 include("sim.jl")
 include("control.jl")
+include("sink.jl")
 
-export view_car, sim_car, simulate, test_simulate, get_vis, car_sim_server, CarConfig
+export view_car, sim_car, simulate, test_simulate, get_vis, server, CarConfig, keyboard_controller
 
 end

@@ -37,7 +37,7 @@ function configure_car!(mvis, state, joints, config)
     set_configuration!(mvis, configuration(state))
 end
 
-function configure_contact!(chevy)
+function configure_contact_points!(chevy)
     origin = RigidBodyDynamics.Point3D(bodies(chevy)[1].frame_definitions[1].from, [0.0,0,0])
     one_up = RigidBodyDynamics.Point3D(bodies(chevy)[1].frame_definitions[1].from, [0.0,0,1.0])
     dir_up = RigidBodyDynamics.FreeVector3D(one_up)
@@ -69,12 +69,10 @@ end
 
 function view_car(vis; max_realtime_rate=1.0)
     delete!(vis)
-    #delete!(vis["/Grid"])
-    #delete!(vis["/Axes"])
     urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
     chevy = parse_urdf(urdf_path, floating=true)
     
-    configure_contact!(chevy)
+    configure_contact_points!(chevy)
 
     state = MechanismState(chevy)
 
@@ -90,6 +88,7 @@ function view_car(vis; max_realtime_rate=1.0)
     chevy_visuals = URDFVisuals(urdf_path, package_path=[dirname(pathof(VehicleSim))])
     
     mvis = MechanismVisualizer(chevy, chevy_visuals, vis)
+    @infiltrate
 
     all_joints = joints(chevy)
     config = CarConfig(SVector(0.0,0,2.5), 0.0, 0.0, 0.0, 0.0)
