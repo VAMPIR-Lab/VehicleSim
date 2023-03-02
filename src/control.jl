@@ -1,6 +1,7 @@
 struct VehicleCommand
     steering_angle::Float64
     forward_force::Float64
+    persist::Bool
 end
 
 
@@ -18,37 +19,44 @@ function keyboard_controller(host::IPAddr=IPv4(0), port=4444; f_step = 250.0, s_
 
     forward_force = 0.0
     steering_angle = 0.0
+    persist = true
     println("Press 'q' at any time to terminate simulation.")
-    while isopen(socket)
+    while persist && isopen(socket)
         key = get_c()
         if key == 'q'
-            return
-        end
-        if key == 'i'
+            persist = false
+        elseif key == 'i'
             # increase forward force
             forward_force += f_step
         elseif key == 'k'
             # decrease forward force
             forward_force -= f_step
-        elseif key == 'h'
+        elseif key == 'j'
             # increase steering angle
             steering_angle += s_step
-        else
+        elseif key == 'l'
             # decrease steering angle
             steering_angle -= s_step
         end
 
-        cmd = VehicleCommand(steering_angle, forward_force)
+        cmd = VehicleCommand(steering_angle, forward_force, persist)
         
         Serialization.serialize(socket, cmd)
     end
+    close(socket)
 end
 
 function spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_id)
     chevy = deepcopy(chevy_base)
     chevy.graph.vertices[2].name="chevy_$vehicle_id"
+    configure_contact!(chevy)
     state = MechanismState(chevy)
     mvis = MechanismVisualizer(chevy, chevy_visuals, vis)
+
+
+    
+    config = CarConfig(SVector(0.0,0,2.5), 0.0, 0.0, 0.0, 0.0)
+    configure_car!(mvis, state, joints(chevy), config)
 
     println("car_spawned")
 
@@ -80,7 +88,7 @@ function spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_i
         set_reference!(car_cmd)
     end
    
-    vehicle_simulate(state, mvis, 10.0, control!, wrenches!; max_realtime_rate=1.0)
+    vehicle_simulate(state, mvis, 100.0, control!, wrenches!; max_realtime_rate=1.0)
 end
 
 
