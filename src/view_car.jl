@@ -45,24 +45,18 @@ function configure_contact_points!(chevy)
     hs = RigidBodyDynamics.HalfSpace3D(origin, dir_up)
     RigidBodyDynamics.add_environment_primitive!(chevy, hs)
 
-    # define frictionless contact point on wheel origins (will need to change
+    # define contact point on wheel origins (will need to change
     # this for sloped surfaces   
-    zero_friction_model = RigidBodyDynamics.ViscoelasticCoulombModel{Float64}(0,1.0,1.0)
+    friction_model = RigidBodyDynamics.ViscoelasticCoulombModel{Float64}(1000.0,1000.0,1000.0)
     normal_contact_model = RigidBodyDynamics.hunt_crossley_hertz() # investigate parameters if penetrating
-    soft_contact_model = RigidBodyDynamics.SoftContactModel(normal_contact_model, zero_friction_model)
+    soft_contact_model = RigidBodyDynamics.SoftContactModel(normal_contact_model, friction_model)
 
-    axle = bodies(chevy)[6] 
-    for frame_id in 2:3
-        frame = axle.frame_definitions[frame_id].from
-        pt = RigidBodyDynamics.Point3D(frame, SVector(0.0,-1.25,0))
-        contact_point = RigidBodyDynamics.ContactPoint(pt, soft_contact_model)
-        RigidBodyDynamics.add_contact_point!(axle, contact_point)
-    end
-    for (link_id, offset) in zip((7,8), (0.2,-0.2))
+    for (link_id, frame_id) in zip((6,6,7,8), (2,3,2,2))
         link = bodies(chevy)[link_id]
-        frame = link.frame_definitions[2].from
-        pt = RigidBodyDynamics.Point3D(frame, SVector(0.0,-1.25,offset))
-        contact_point = RigidBodyDynamics.ContactPoint(pt, soft_contact_model)
+        frame = link.frame_definitions[frame_id].from
+        pt = RigidBodyDynamics.Point3D(frame, SVector(0.0,-1.25,0))
+        fl_dir = RigidBodyDynamics.Point3D(frame, SVector(1.0, 0, 0)) |> RigidBodyDynamics.FreeVector3D
+        contact_point = RigidBodyDynamics.ContactPoint(pt, fl_dir, soft_contact_model)
         RigidBodyDynamics.add_contact_point!(link, contact_point)
     end
 end
@@ -77,8 +71,8 @@ function view_car(vis; max_realtime_rate=1.0)
     state = MechanismState(chevy)
 
     wheel_angular_vel = 3.0
-    drive_force = 2000.0
-    steering_angle = 0.5
+    drive_force = 1000.0
+    steering_angle = 0.15
 
     for jid in 8:11
         wheel_joint = joints(chevy)[jid]
@@ -88,12 +82,10 @@ function view_car(vis; max_realtime_rate=1.0)
     chevy_visuals = URDFVisuals(urdf_path, package_path=[dirname(pathof(VehicleSim))])
     
     mvis = MechanismVisualizer(chevy, chevy_visuals, vis)
-    @infiltrate
 
     all_joints = joints(chevy)
-    config = CarConfig(SVector(0.0,0,2.5), 0.0, 0.0, 0.0, 0.0)
+    config = CarConfig(SVector(0.0,0,4.0), 0.0, 0.0, 0.0, 0.0)
     configure_car!(mvis, state, all_joints, config)
-
 
     control! = (torques, t, state) -> begin
         torques .= 0.0
@@ -101,16 +93,18 @@ function view_car(vis; max_realtime_rate=1.0)
         suspension_control!(torques, t, state)
     end
 
-
     @infiltrate
+
+
     wrenches! = (bodyid_to_wrench, t, state) -> begin
         RigidBodyDynamics.update_transforms!(state)
+        df = t > 0.1 ? drive_force : 0.0
         for i = 7:8
             bodyid = BodyID(i)
             wheel = bodies(chevy)[i]
             frame = wheel.frame_definitions[1].from
             body_to_root = transform_to_root(state, bodyid, false)
-            wrench = Wrench{Float64}(frame, [0.0,0,0], [drive_force,0,0])
+            wrench = Wrench{Float64}(frame, [0.0,0,0], [df,0,0])
             bodyid_to_wrench[BodyID(i)] = transform(wrench, body_to_root)
         end
         nothing
