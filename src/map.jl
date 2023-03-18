@@ -65,7 +65,6 @@ function training_map(; lane_width = 5.0,
 
     segs_I = add_fourway_intersection!(nothing, nothing; intersection_curvature, speed_limit, lane_width)
     segs = add_straight_segments!(segs_I, west; length=block_length, speed_limit, stop_outbound=true, stop_inbound=true)
-    @infiltrate
     segs_T = add_T_intersection!(segs, west, east; intersection_curvature, lane_width, speed_limit)
     segs_S = add_pullout_segments!(segs_T, south; length=block_length, pullout_length, pullout_taper, lane_width, speed_limit, pullout_inbound=false, pullout_outbound=true)
     segs_S = add_curved_segments!(segs_S, south, true; turn_curvature, speed_limit, lane_width)
@@ -321,17 +320,17 @@ function add_fourway_intersection!(base, direction; intersection_curvature = 0.2
     if isnothing(base)
         offset = SVector(0.0, 0)
     else
-        origins = base.sinks[direction]
-        sinks = base.origins[direction]
+        prev_sinks = base.sinks[direction]
+        prev_origins = base.origins[direction]
 
         if direction == north
-            offset = (sinks |> first).lane_boundaries[2].pt_b + SVector(-r, 0.0)
+            offset = (prev_sinks |> first).lane_boundaries[1].pt_b + SVector(-r-lw, 0.0)
         elseif direction == east
-            offset = (origins |> first).lane_boundaries[2].pt_a + SVector(0.0, -r)
+            offset = (prev_sinks |> first).lane_boundaries[2].pt_b + SVector(0.0, -r)
         elseif direction == south
-            offset = (origins |> first).lane_boundaries[2].pt_a + SVector(-r, -2*lw -2r)
+            offset = (prev_sinks |> first).lane_boundaries[2].pt_b + SVector(-r, -2*lw -2r)
         elseif direction == west
-            offset = (sinks |> first).lane_boundaries[2].pt_a + SVector(-2*lw - 2*r, -r)
+            offset = (prev_sinks |> first).lane_boundaries[1].pt_b + SVector(-2*lw - 2*r, -r-lw)
         end
     end
     pt_a = offset+SVector(r, 0.0)
