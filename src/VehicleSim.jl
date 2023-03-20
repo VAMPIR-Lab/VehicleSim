@@ -12,9 +12,6 @@ using Sockets
 using Serialization
 using StaticArrays
 using DifferentialEquations
-using Ipopt
-using PATHSolver
-using Symbolics
 
 include("view_car.jl")
 include("objects.jl")
