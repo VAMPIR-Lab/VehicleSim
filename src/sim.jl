@@ -41,7 +41,7 @@ function server(vis=nothing, host::IPAddr = IPv4(0), port=4444)
     chevy_joints = joints(chevy_base)
 
     vehicle_count = 0
-    sim_task = @async begin
+    sim_task = errormonitor(@async begin
         server = listen(host, port)
         while true
             try
@@ -52,9 +52,7 @@ function server(vis=nothing, host::IPAddr = IPv4(0), port=4444)
                 break
             end
         end
-    end
-    delete!(vis["/Grid"])
-    delete!(vis["/Axes"])
+    end)
     vis
 end
 
