@@ -128,7 +128,6 @@ function generate_laneline_mesh(lb::LaneBoundary; res=1.0, width=0.3)
     MeshCat.Object(mesh, MeshPhongMaterial(color=color))
 end
 
-
 function generate_lane_mesh(lb1, lb2, lane_type; width=0.3, res=1.0)
     if lane_type == standard || lane_type == stop_sign || lane_type == intersection
         color=RGBA{Float32}(.2,.2,.2,1)

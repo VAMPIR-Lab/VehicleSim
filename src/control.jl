@@ -137,8 +137,6 @@ function wheel_control!(bodyid_to_wrench, chevy, t, state::MechanismState;
     yaw = atan(2.0*(q.y*q.z + q.w*q.x), q.w*q.w - q.x*q.x - q.y*q.y + q.z*q.z)
     forward = [cos(yaw), sin(yaw), 0]
     forward_velocity = state.v[4:6]'*forward
-    #total_velocity = norm(state.v[4:6])
-    #@info "forward vel: $forward_velocity, total_vel: $total_velocity"
     drive_force = k₁ * (forward_velocity - reference_velocity)
 
     for i = 7:8
@@ -160,7 +158,6 @@ function steering_control!(torques::AbstractVector, t, state::MechanismState;
     linkage_right = js[7]
 
     actual = configuration(state, linkage_left)
-    #@info "Actual angle: $actual, reference angle: $reference_angle"
 
     torques[velocity_range(state, linkage_left)] .= k₁ * (configuration(state, linkage_left) .- reference_angle) + k₂ * velocity(state, linkage_left)
     torques[velocity_range(state, linkage_right)] .= k₁ * (configuration(state, linkage_right) .- reference_angle) + k₂ * velocity(state, linkage_right)
