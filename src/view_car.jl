@@ -95,9 +95,6 @@ function view_car(vis; max_realtime_rate=1.0)
         suspension_control!(torques, t, state)
     end
 
-    @infiltrate
-
-
     wrenches! = (bodyid_to_wrench, t, state) -> begin
         RigidBodyDynamics.update_transforms!(state)
         df = t > 0.1 ? drive_force : 0.0

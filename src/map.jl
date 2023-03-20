@@ -130,9 +130,9 @@ end
 
 function generate_lane_mesh(lb1, lb2, lane_type; width=0.3, res=1.0)
     if lane_type == standard || lane_type == stop_sign || lane_type == intersection
-        color=RGBA{Float32}(.2,.2,.2,1)
+        color=RGBA{Float32}(.35,.35,.35,1)
     elseif lane_type == loading_zone
-        color=RGBA{Float32}(.4,.4,.4,1)
+        color=RGBA{Float32}(.5,.5,.5,1)
     end
     pt_a = lb1.pt_a
     pt_b = lb1.pt_b

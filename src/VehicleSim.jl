@@ -23,6 +23,6 @@ include("control.jl")
 include("sink.jl")
 include("map.jl")
 
-export view_car, sim_car, simulate, test_simulate, get_vis, server, CarConfig, keyboard_controller
+export view_car, sim_car, simulate, test_simulate, get_vis, server, CarConfig, client
 
 end
