@@ -1,8 +1,14 @@
 function get_vis(host::IPAddr = ip"127.0.0.1", default_port=8700)
     vis = Visualizer(MeshCat.CoreVisualizer(host, default_port), ["meshcat"])
     open(vis)
-    delete!(vis)
+    setcameratarget!(vis, [0,20,0])
+    setcameraposition!(vis, [-3, 20, 1])
     return vis
+end
+
+function remove_grid!(vis)
+    delete!(vis["/Grid"])
+    delete!(vis["/Axes"])
 end
 
 function configure_car!(mvis, state, joints, config)

@@ -53,7 +53,7 @@ function server(vis=nothing, host::IPAddr = IPv4(0), port=4444)
             end
         end
     end)
-    vis
+    remove_grid!(vis)
 end
 
 function spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_id, server)
@@ -105,10 +105,14 @@ function spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_i
     end
 
     @async while isopen(sock)
-        state_msg = VehicleState(state_q, state_v)
-        car_cmd = Serialization.deserialize(sock)
+        car_cmd = deserialize(sock)
         set_reference!(car_cmd)
     end 
+    
+    @async while isopen(sock)
+        state_msg = VehicleState(state_q, state_v)
+        serialize(sock, state_msg)
+    end
 
     try 
         vehicle_simulate(state, 
@@ -128,5 +132,12 @@ end
 
 function client(host::IPAddr=IPv4(0), port=4444, control=keyboard_controller)
     socket = Sockets.connect(host, port)
+
+    state_msg = VehicleState(zeros(0), zeros(0))
+
+    @async while isopen(socket)
+        state_msg = deserialize(socket)
+    end
+
     control(socket)
 end
