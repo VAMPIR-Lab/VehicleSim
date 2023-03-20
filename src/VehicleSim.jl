@@ -1,5 +1,7 @@
 module VehicleSim
 
+using ColorTypes
+using GeometryBasics
 using MeshCat
 using MeshCatMechanisms
 using RigidBodyDynamics

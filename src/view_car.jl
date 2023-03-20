@@ -1,6 +1,7 @@
 function get_vis(host::IPAddr = ip"127.0.0.1", default_port=8700)
     vis = Visualizer(MeshCat.CoreVisualizer(host, default_port), ["meshcat"])
     open(vis)
+    delete!(vis)
     return vis
 end
 
@@ -78,6 +79,7 @@ function view_car(vis; max_realtime_rate=1.0)
         wheel_joint = joints(chevy)[jid]
         set_velocity!(state, wheel_joint, -wheel_angular_vel)
     end
+    @infiltrate
     
     chevy_visuals = URDFVisuals(urdf_path, package_path=[dirname(pathof(VehicleSim))])
     

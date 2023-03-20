@@ -23,6 +23,9 @@ function server(vis=nothing, host::IPAddr = IPv4(0), port=4444)
     if isnothing(vis)
         vis = get_vis()
     end
+    map = training_map()
+    view_map(vis, map)
+
     urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
     chevy_base = parse_urdf(urdf_path, floating=true)
     chevy_visuals = URDFVisuals(urdf_path, package_path=[dirname(pathof(VehicleSim))])
@@ -41,4 +44,7 @@ function server(vis=nothing, host::IPAddr = IPv4(0), port=4444)
             end
         end
     end
+    delete!(vis["/Grid"])
+    delete!(vis["/Axes"])
+    vis
 end

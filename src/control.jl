@@ -133,9 +133,13 @@ end
 
 function wheel_control!(bodyid_to_wrench, chevy, t, state::MechanismState;
         reference_velocity=0.0, k₁=-1000.0)
-    actual_velocity = norm(state.v[4:6])
-    @info "actual vel: $actual_velocity, target vel: $reference_velocity"
-    drive_force = k₁ * (actual_velocity - reference_velocity)
+    q = (; w = state.q[1], x = state.q[2], y = state.q[3], z = state.q[4])
+    yaw = atan(2.0*(q.y*q.z + q.w*q.x), q.w*q.w - q.x*q.x - q.y*q.y + q.z*q.z)
+    forward = [cos(yaw), sin(yaw), 0]
+    forward_velocity = state.v[4:6]'*forward
+    #total_velocity = norm(state.v[4:6])
+    #@info "forward vel: $forward_velocity, total_vel: $total_velocity"
+    drive_force = k₁ * (forward_velocity - reference_velocity)
 
     for i = 7:8
         bodyid = BodyID(i)
@@ -156,13 +160,13 @@ function steering_control!(torques::AbstractVector, t, state::MechanismState;
     linkage_right = js[7]
 
     actual = configuration(state, linkage_left)
-    @info "Actual angle: $actual, reference angle: $reference_angle"
+    #@info "Actual angle: $actual, reference angle: $reference_angle"
 
     torques[velocity_range(state, linkage_left)] .= k₁ * (configuration(state, linkage_left) .- reference_angle) + k₂ * velocity(state, linkage_left)
     torques[velocity_range(state, linkage_right)] .= k₁ * (configuration(state, linkage_right) .- reference_angle) + k₂ * velocity(state, linkage_right)
 end
 
-function suspension_control!(torques::AbstractVector, t, state::MechanismState; k₁=-6500.0, k₂=-2500.0, k₃ = -17500.0, k₄=-5000.0)
+function suspension_control!(torques::AbstractVector, t, state::MechanismState; k₁=-6500.0, k₂=-2500.0, k₃ = -25000.0, k₄=-10000.0)
     js = joints(state.mechanism)
     front_axle_mount = js[2]
     rear_axle_mount = js[3]
