@@ -105,8 +105,8 @@ function generate_laneline_mesh(lb::LaneBoundary; res=1.0, width=0.3)
         rad_2 = rad + width/2
         points = mapreduce(vcat, 0:N) do i
             θ = θ0 + dθ * i
-            [GeometryBasics.Point3f(center[1]+rad_1*cos(θ), center[2]+rad_1*sin(θ), 0),
-             GeometryBasics.Point3f(center[1]+rad_2*cos(θ), center[2]+rad_2*sin(θ), 0)]
+            [GeometryBasics.Point{3,Float64}(center[1]+rad_1*cos(θ), center[2]+rad_1*sin(θ), 0),
+             GeometryBasics.Point{3,Float64}(center[1]+rad_2*cos(θ), center[2]+rad_2*sin(θ), 0)]
         end
     else
         dir = delta / norm(delta)
@@ -114,8 +114,8 @@ function generate_laneline_mesh(lb::LaneBoundary; res=1.0, width=0.3)
         points = mapreduce(vcat, t) do dist  
             pt_1 = pt_a+dir*dist-width/2*right
             pt_2 = pt_a+dir*dist+width/2*right
-            [GeometryBasics.Point3f(pt_1[1], pt_1[2], 0),
-             GeometryBasics.Point3f(pt_2[1], pt_2[2], 0)]
+            [GeometryBasics.Point{3, Float64}(pt_1[1], pt_1[2], 0),
+             GeometryBasics.Point{3, Float64}(pt_2[1], pt_2[2], 0)]
         end
     end
     K = length(points)/2 |> Int
@@ -178,8 +178,8 @@ function generate_lane_mesh(lb1, lb2, lane_type; width=0.3, res=1.0)
         end
         points = mapreduce(vcat, 0:N) do i
             θ = θ0 + dθ * i
-            [GeometryBasics.Point3f(center[1]+rad_1*cos(θ), center[2]+rad_1*sin(θ), 0),
-             GeometryBasics.Point3f(center[1]+rad_2*cos(θ), center[2]+rad_2*sin(θ), 0)]
+            [GeometryBasics.Point{3,Float64}(center[1]+rad_1*cos(θ), center[2]+rad_1*sin(θ), 0),
+             GeometryBasics.Point{3,Float64}(center[1]+rad_2*cos(θ), center[2]+rad_2*sin(θ), 0)]
         end
     else
         dir1 = delta / norm(delta)
@@ -197,8 +197,8 @@ function generate_lane_mesh(lb1, lb2, lane_type; width=0.3, res=1.0)
         points = mapreduce(vcat, zip(t, t2)) do (dist1, dist2)
             pt_1 = pt_a+dir1*dist1+width/2*right1
             pt_2 = lb2.pt_a + dir2*dist2-width/2*right2
-            [GeometryBasics.Point3f(pt_1[1], pt_1[2], 0),
-             GeometryBasics.Point3f(pt_2[1], pt_2[2], 0)]
+            [GeometryBasics.Point{3,Float64}(pt_1[1], pt_1[2], 0),
+             GeometryBasics.Point{3,Float64}(pt_2[1], pt_2[2], 0)]
         end
     end
 
