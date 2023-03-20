@@ -128,10 +128,13 @@ function generate_laneline_mesh(lb::LaneBoundary; res=1.0, width=0.3)
     MeshCat.Object(mesh, MeshPhongMaterial(color=color))
 end
 
-"""
-Assuming only 90° turns for now
-"""
-function generate_lane_mesh(lb1, lb2; width=0.3, res=1.0, color=RGBA{Float32}(.2,.2,.2,1))
+
+function generate_lane_mesh(lb1, lb2, lane_type; width=0.3, res=1.0)
+    if lane_type == standard || lane_type == stop_sign || lane_type == intersection
+        color=RGBA{Float32}(.2,.2,.2,1)
+    elseif lane_type == loading_zone
+        color=RGBA{Float32}(.4,.4,.4,1)
+    end
     pt_a = lb1.pt_a
     pt_b = lb1.pt_b
     curvature = lb1.curvature
@@ -199,6 +202,16 @@ function generate_lane_mesh(lb1, lb2; width=0.3, res=1.0, color=RGBA{Float32}(.2
              GeometryBasics.Point3f(pt_2[1], pt_2[2], 0)]
         end
     end
+
+    if lane_type == stop_sign
+        points_end = points[end-3:end]
+        points = points[1:end-2]
+        faces_end = [GeometryBasics.TriangleFace(1,3,4),
+                     GeometryBasics.TriangleFace(1,2,4)]
+    else
+        faces_end = nothing
+    end
+
     K = length(points)/2 |> Int
 
     faces = mapreduce(vcat, 1:K-1) do k
@@ -206,7 +219,16 @@ function generate_lane_mesh(lb1, lb2; width=0.3, res=1.0, color=RGBA{Float32}(.2
          GeometryBasics.TriangleFace((k-1)*2+1,k*2,k*2+2)]
     end
     mesh = GeometryBasics.Mesh(points, faces)
-    MeshCat.Object(mesh, MeshPhongMaterial(color=color))
+    obj = MeshCat.Object(mesh, MeshPhongMaterial(color=color))
+
+    if lane_type == stop_sign
+        mesh_end = GeometryBasics.Mesh(points_end, faces_end)
+        white = RGBA{Float32}(1,1,1,1)
+        obj_end = MeshCat.Object(mesh_end, MeshPhongMaterial(color=white))
+    else
+        obj_end = nothing
+    end
+    (; obj, obj_end)
 end
 
 function view_map(vis, all_segs)
@@ -228,8 +250,11 @@ function generate_road_segment_mesh(seg; lane_width=0.3, poly_res=1.0)
         m = generate_laneline_mesh(lb; width=lane_width, res=poly_res)
         meshes["line_$e"] = m
         if e ≤ length(seg.lane_types)
-            m = generate_lane_mesh(lb, seg.lane_boundaries[e+1]; res=poly_res)
-            meshes["lane_$e"] = m
+            ms = generate_lane_mesh(lb, seg.lane_boundaries[e+1], seg.lane_types[e]; res=poly_res)
+            meshes["lane_$e"] = ms.obj
+            if !isnothing(ms.obj_end)
+                meshes["stop_$e"] = ms.obj_end
+            end
         end
     end
     meshes
