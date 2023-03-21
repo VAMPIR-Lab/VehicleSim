@@ -8,6 +8,7 @@ using RigidBodyDynamics
 using Infiltrator
 using LinearAlgebra
 using SparseArrays
+using Suppressor
 using Sockets
 using Serialization
 using StaticArrays

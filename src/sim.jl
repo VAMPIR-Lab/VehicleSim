@@ -1,12 +1,13 @@
 struct VehicleState
     q::Vector{Float64}
     v::Vector{Float64}
+    persist::Bool
 end
 
 struct EndOfSimException <: Exception end
 struct EndOfVehicleException <: Exception end
 
-function vehicle_simulate(state::MechanismState{X}, mvis, final_time, internal_control!, external_control!, publisher!; Δt=1e-4, stabilization_gains=RigidBodyDynamics.default_constraint_stabilization_gains(X), max_realtime_rate=Inf) where X
+function vehicle_simulate(state::MechanismState{X}, channel, final_time, internal_control!, external_control!, publisher!; Δt=1e-4, stabilization_gains=RigidBodyDynamics.default_constraint_stabilization_gains(X), max_realtime_rate=Inf) where X
     T = RigidBodyDynamics.cache_eltype(state)
     result = DynamicsResult{T}(state.mechanism)
     control_torques = similar(velocity(state))
@@ -23,17 +24,33 @@ function vehicle_simulate(state::MechanismState{X}, mvis, final_time, internal_c
         end
     end
     tableau = RigidBodyDynamics.runge_kutta_4(T)
-    sink = FollowCamSink(mvis)
+    sink = PublisherSink(channel)
     integrator = RigidBodyDynamics.MuntheKaasIntegrator(state, closed_loop_dynamics!, tableau, sink)
     RigidBodyDynamics.integrate(integrator, final_time, Δt; max_realtime_rate)
 end
 
-function server(vis=nothing, host::IPAddr = IPv4(0), port=4444)
-    if isnothing(vis)
-        vis = get_vis()
+function vis_updater(visualizers, channels;
+            follow_dist=35.0, 
+            follow_height=6.0,
+            follow_offset=6.0)
+    while true
+        for (id, channel) in channels
+            if isready(channel)
+                state = take!(channel)
+            end
+        end
     end
+end
+
+
+
+function server(max_clients=4, host::IPAddr = IPv4(0), port=4444)
     map = training_map()
-    view_map(vis, map)
+    server_visualizer = get_vis(map, true)
+    inform_hostport(server_visualizer, "Server visualizer")
+    client_visualizers = [get_vis(map, false) for _ in 1:max_clients]
+    client_channels = Dict(i=>Channel{VehicleState}(1) for i = 1:max_clients)
+    all_visualizers = [client_visualizers; server_visualizer]
 
     urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
     chevy_base = parse_urdf(urdf_path, floating=true)
@@ -47,24 +64,27 @@ function server(vis=nothing, host::IPAddr = IPv4(0), port=4444)
             try
                 sock = accept(server)
                 @info "Client accepted."
-                @async spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_count+=1, server)
+                vehicle_count += 1
+                channel = channels[vehicle_count]
+                open(client_visualizers[vehicle_count])
+                inform_hostport(client_visualizers[vehicle_count], "Client follow-cam")
+                @async spawn_car(channel, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_count, server)
             catch e
                 break
             end
         end
     end)
-    remove_grid!(vis)
+     
 end
 
-function spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_id, server)
+function spawn_car(channel, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_id, server)
     chevy = deepcopy(chevy_base)
     chevy.graph.vertices[2].name="chevy_$vehicle_id"
     configure_contact_points!(chevy)
     state = MechanismState(chevy)
-    mvis = MechanismVisualizer(chevy, chevy_visuals, vis)
 
     config = CarConfig(SVector(-7,12,2.5), 0.0, 0.0, 0.0, 0.0)
-    configure_car!(mvis, state, joints(chevy), config)
+    configure_car!(nothing, state, joints(chevy), config)
 
     v = 0.0
     θ = 0.0
@@ -115,15 +135,17 @@ function spawn_car(vis, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_i
     end
 
     try 
+        println(mvisualizers)
         vehicle_simulate(state, 
-                         mvis, 
+                         channel,
                          Inf, 
                          control!, 
                          wrenches!,
                          publisher!;
                          max_realtime_rate=1.0)
     catch e
-        delete_vehicle(vis, chevy)
+        #delete_vehicle(vis, chevy) TODO send on channel?
+        put!(channel, VehicleState(state.q, state.v, false))
         if e isa EndOfSimException
             close(server)
         end

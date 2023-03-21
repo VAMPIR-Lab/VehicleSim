@@ -1,10 +1,19 @@
-function get_vis(host::IPAddr = ip"127.0.0.1", default_port=8700)
-    vis = Visualizer(MeshCat.CoreVisualizer(host, default_port), ["meshcat"])
-    open(vis)
-    setcameratarget!(vis, [0,20,0])
-    setcameraposition!(vis, [-3, 20, 1])
+function get_vis(map=nothing, open_vis=true, host::IPAddr = ip"127.0.0.1", default_port=8700)
+    vis = @suppress Visualizer(MeshCat.CoreVisualizer(host, default_port), ["meshcat"])
+    if !isnothing(map)
+        view_map(vis, map)
+    end
+    open_vis && open(vis)
     return vis
 end
+
+function inform_hostport(vis, name=nothing)
+    if isnothing(name) 
+        name = "Visualizer"
+    end
+    @info "$name can be connected to at $(vis.core.host), port $(vis.core.port)"
+end
+
 
 function remove_grid!(vis)
     delete!(vis["/Grid"])
@@ -41,7 +50,9 @@ function configure_car!(mvis, state, joints, config)
     set_configuration!(state, wb, [q; config.position])
     set_configuration!(state, lsl, config.steering_angle)
     set_configuration!(state, rsl, config.steering_angle)
-    set_configuration!(mvis, configuration(state))
+    if !isnothing(mvis)
+        set_configuration!(mvis, configuration(state))
+    end
 end
 
 function configure_contact_points!(chevy)
