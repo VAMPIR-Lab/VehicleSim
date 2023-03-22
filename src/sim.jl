@@ -61,7 +61,7 @@ end
 function server(max_clients=4, host::IPAddr = ip"127.0.0.1", port=4444; full_state=true)
     map = training_map()
     server_visualizer = get_vis(map, true, host)
-    inform_hostport(server_visualizer, "Server visualizer")
+    @info inform_hostport(server_visualizer, "Server visualizer")
     client_visualizers = [get_vis(map, false, host) for _ in 1:max_clients]
     all_visualizers = [client_visualizers; server_visualizer]
 
@@ -76,10 +76,11 @@ function server(max_clients=4, host::IPAddr = ip"127.0.0.1", port=4444; full_sta
         while true
             try
                 sock = accept(server)
-                @info "Client accepted."
                 vehicle_count += 1
-                open(client_visualizers[vehicle_count])
-                inform_hostport(client_visualizers[vehicle_count], "Client follow-cam")
+                msg = inform_hostport(client_visualizers[vehicle_count], "Client follow-cam")
+                @info "Client accepted."
+                # open(client_visualizers[vehicle_count])
+                serialize(sock, msg)
                 errormonitor(@async spawn_car(all_visualizers, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_count, server; full_state))
             catch e
                 break

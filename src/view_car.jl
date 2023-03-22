@@ -12,7 +12,7 @@ function inform_hostport(vis, name=nothing)
     if isnothing(name) 
         name = "Visualizer"
     end
-    @info "$name can be connected to at $(vis.core.host), port $(vis.core.port)"
+    "$name can be connected to at $(vis.core.host), port $(vis.core.port)"
 end
 
 

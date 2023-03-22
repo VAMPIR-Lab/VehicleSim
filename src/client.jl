@@ -15,6 +15,10 @@ end
 
 function keyboard_client(host::IPAddr=IPv4(0), port=4444; f_step = 1.0, s_step = π/10)
     socket = Sockets.connect(host, port)
+    (peer_host, peer_port) = getpeername(socket)
+    msg = deserialize(socket) # Visualization info
+    @info msg
+
     local state_msg
     @async while isopen(socket)
         state_msg = deserialize(socket)
