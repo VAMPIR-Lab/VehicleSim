@@ -111,7 +111,6 @@ function spawn_car(visualizers, sock, chevy_base, chevy_visuals, chevy_joints, v
     persist = true
     shutdown = false
     set_reference! = (cmd) -> begin
-        @info "Received command"
         if !cmd.persist 
             @info "Destroying vehicle."
             close(sock)
