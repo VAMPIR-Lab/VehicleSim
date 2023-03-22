@@ -55,6 +55,22 @@ function configure_car!(mvis, state, joints, config)
     end
 end
 
+function delete_vehicle!(mvis)
+    vehicle = mvis.state.mechanism
+    vis = mvis.visualizer
+    delete_vehicle!(vis, vehicle)
+end
+
+function delete_vehicle!(vis, vehicle)
+    name = vehicle.graph.vertices[2].name
+    path = "/meshcat/world/$name"
+    delete!(vis[path])
+    #setcameratarget!(vis, [0,0,0])
+    #setcameraposition!(vis, [0, -3, 1])
+
+    nothing
+end
+
 function configure_contact_points!(chevy)
     origin = RigidBodyDynamics.Point3D(bodies(chevy)[1].frame_definitions[1].from, [0.0,0,0])
     one_up = RigidBodyDynamics.Point3D(bodies(chevy)[1].frame_definitions[1].from, [0.0,0,1.0])
@@ -96,11 +112,11 @@ function view_car(vis; max_realtime_rate=1.0)
         wheel_joint = joints(chevy)[jid]
         set_velocity!(state, wheel_joint, -wheel_angular_vel)
     end
-    @infiltrate
     
     chevy_visuals = URDFVisuals(urdf_path, package_path=[dirname(pathof(VehicleSim))])
     
     mvis = MechanismVisualizer(chevy, chevy_visuals, vis)
+    @infiltrate
 
     all_joints = joints(chevy)
     config = CarConfig(SVector(0.0,0,4.0), 0.0, 0.0, 0.0, 0.0)

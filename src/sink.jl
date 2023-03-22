@@ -1,5 +1,5 @@
-mutable struct FollowCamSink{M <: MechanismState} <: RigidBodyDynamics.OdeIntegrators.OdeResultsSink
-    vis::Vector{MechanismVisualizer{M}}
+mutable struct FollowCamSink <: RigidBodyDynamics.OdeIntegrators.OdeResultsSink
+    mviss::Vector{MechanismVisualizer}
     follow_cam_id::Int
     min_wall_Δt::Float64
     last_update_wall_time::Float64
@@ -7,13 +7,12 @@ mutable struct FollowCamSink{M <: MechanismState} <: RigidBodyDynamics.OdeIntegr
     follow_height::Float64
     follow_offset::Float64
 
-    function FollowCamSink(vis::Vector{MechanismVisualizer{M}}, follow_cam_id; 
+    function FollowCamSink(mviss, follow_cam_id; 
             max_fps::Float64 = 60., 
             follow_dist=35.0, 
             follow_height=6.0,
-            follow_offset=6.0) where {M <: MechanismState}
-        println("Made it here!")
-        new{M}(vis, follow_cam_id, 1 / max_fps, -Inf, follow_dist, follow_height, follow_offset)
+            follow_offset=6.0)
+        new(mviss, follow_cam_id, 1 / max_fps, -Inf, follow_dist, follow_height, follow_offset)
     end
 end
 
@@ -43,10 +42,10 @@ function RigidBodyDynamics.OdeIntegrators.process(sink::FollowCamSink, t, state)
         offset = [sink.follow_dist * [cos(yaw), sin(yaw)]; -sink.follow_height] +
                  sink.follow_offset * [sin(yaw), -cos(yaw), 0]
 
-        setcameratarget!(sink.vis[sink.follow_cam_id].visualizer, pose)
-        setcameraposition!(sink.vis[sink.follow_cam_id].visualizer, pose-offset)
+        setcameratarget!(sink.mviss[sink.follow_cam_id].visualizer, pose)
+        setcameraposition!(sink.mviss[sink.follow_cam_id].visualizer, pose-offset)
 
-        foreach(vis->set_configuration!(vis, configuration(state)), sink.vis)
+        foreach(mvis->set_configuration!(mvis, configuration(state)), sink.mviss)
 
         sink.last_update_wall_time = time()
     end
@@ -56,7 +55,7 @@ end
 function RigidBodyDynamics.OdeIntegrators.process(sink::PublisherSink, t, state)
     wall_Δt = time() - sink.last_update_wall_time
     if wall_Δt > sink.min_wall_Δt
-        put!(sink.channel, VehicleState(state.q, state.v, true))
+        put!(sink.channel, VehicleState(state, true))
         sink.last_update_wall_time = time()
     end
     nothing

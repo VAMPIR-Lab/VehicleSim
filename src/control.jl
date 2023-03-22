@@ -49,16 +49,6 @@ function keyboard_controller(socket; f_step = 1.0, s_step = π/10)
     #close(socket) # this should be closed by sim process
 end
 
-function delete_vehicle(vis, vehicle)
-    name = vehicle.graph.vertices[2].name
-    path = "/meshcat/world/$name"
-    delete!(vis[path])
-    open(vis)
-    setcameratarget!(vis, [0,0,0])
-    setcameraposition!(vis, [0, -3, 1])
-
-    nothing
-end
 
 function wheel_control!(bodyid_to_wrench, chevy, t, state::MechanismState;
         reference_velocity=0.0, k₁=-1000.0)
