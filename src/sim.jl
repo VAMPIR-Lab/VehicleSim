@@ -60,9 +60,9 @@ end
 
 function server(max_clients=4, host::IPAddr = IPv4(0), port=4444; full_state=true)
     map = training_map()
-    server_visualizer = get_vis(map, true)
+    server_visualizer = get_vis(map, true, host)
     inform_hostport(server_visualizer, "Server visualizer")
-    client_visualizers = [get_vis(map, false) for _ in 1:max_clients]
+    client_visualizers = [get_vis(map, false, host) for _ in 1:max_clients]
     all_visualizers = [client_visualizers; server_visualizer]
 
     urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
