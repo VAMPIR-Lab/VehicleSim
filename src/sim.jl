@@ -1,5 +1,6 @@
 struct VehicleState
-    state::MechanismState
+    q::Vector{Float64}
+    v::Vector{Float64}
     persist::Bool
 end
 
@@ -57,12 +58,11 @@ function vis_updater(mvisualizers, channels;
     end
 end
 
-function server(max_clients=4, host::IPAddr = IPv4(0), port=4444)
+function server(max_clients=4, host::IPAddr = IPv4(0), port=4444; full_state=true)
     map = training_map()
     server_visualizer = get_vis(map, true)
     inform_hostport(server_visualizer, "Server visualizer")
     client_visualizers = [get_vis(map, false) for _ in 1:max_clients]
-    #client_channels = Dict(i=>Channel{VehicleState}(1) for i = 1:max_clients)
     all_visualizers = [client_visualizers; server_visualizer]
 
     urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
@@ -78,10 +78,9 @@ function server(max_clients=4, host::IPAddr = IPv4(0), port=4444)
                 sock = accept(server)
                 @info "Client accepted."
                 vehicle_count += 1
-                #channel = client_channels[vehicle_count]
                 open(client_visualizers[vehicle_count])
                 inform_hostport(client_visualizers[vehicle_count], "Client follow-cam")
-                errormonitor(@async spawn_car(all_visualizers, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_count, server))
+                errormonitor(@async spawn_car(all_visualizers, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_count, server; full_state))
             catch e
                 break
             end
@@ -89,7 +88,7 @@ function server(max_clients=4, host::IPAddr = IPv4(0), port=4444)
     end)
 end
 
-function spawn_car(visualizers, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_id, server)
+function spawn_car(visualizers, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_id, server; full_state=false)
     chevy = deepcopy(chevy_base)
     chevy.graph.vertices[2].name="chevy_$vehicle_id"
     configure_contact_points!(chevy)
@@ -101,7 +100,6 @@ function spawn_car(visualizers, sock, chevy_base, chevy_visuals, chevy_joints, v
 
     config = CarConfig(SVector(-7,12,2.5), 0.0, 0.0, 0.0, 0.0)
     foreach(mvis->configure_car!(mvis, state, joints(chevy), config), mviss)
-    #configure_car!(nothing, state, joints(chevy), config)
     
     v = 0.0
     θ = 0.0
@@ -145,9 +143,9 @@ function spawn_car(visualizers, sock, chevy_base, chevy_visuals, chevy_joints, v
         car_cmd = deserialize(sock)
         set_reference!(car_cmd)
     end 
-    
+ 
     @async while isopen(sock)
-        state_msg = VehicleState(state_q, state_v)
+        state_msg = VehicleState(state_q, state_v, true)
         serialize(sock, state_msg)
     end
 
@@ -168,13 +166,3 @@ function spawn_car(visualizers, sock, chevy_base, chevy_visuals, chevy_joints, v
     end
 end
 
-function client(host::IPAddr=IPv4(0), port=4444, control=keyboard_controller)
-    socket = Sockets.connect(host, port)
-
-    local state_msg
-    @async while isopen(socket)
-        state_msg = deserialize(socket)
-    end
-
-    control(socket)
-end

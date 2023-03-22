@@ -3,6 +3,7 @@ function get_vis(map=nothing, open_vis=true, host::IPAddr = ip"127.0.0.1", defau
     if !isnothing(map)
         view_map(vis, map)
     end
+    remove_grid!(vis)
     open_vis && open(vis)
     return vis
 end
@@ -67,7 +68,6 @@ function delete_vehicle!(vis, vehicle)
     delete!(vis[path])
     #setcameratarget!(vis, [0,0,0])
     #setcameraposition!(vis, [0, -3, 1])
-
     nothing
 end
 

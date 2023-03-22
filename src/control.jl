@@ -1,55 +1,3 @@
-struct VehicleCommand
-    steering_angle::Float64
-    forward_force::Float64 # Rename to target_velocity or similar
-    persist::Bool
-    shutdown::Bool
-end
-
-function get_c()
-    ret = ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), stdin.handle, true)
-    ret == 0 || error("unable to switch to raw mode")
-    c = read(stdin, Char)
-    ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), stdin.handle, false)
-    c
-end
-
-function keyboard_controller(socket; f_step = 1.0, s_step = π/10)
-
-    forward_force = 0.0
-    steering_angle = 0.0
-    persist = true
-    shutdown = false
-    @info "Press 'q' at any time to terminate vehicle. Press 's' to shutdown simulator server."
-    while persist && !shutdown && isopen(socket)
-        key = get_c()
-        if key == 'q'
-            # terminate vehicle
-            persist = false
-        elseif key == 's'
-            # shutdown server
-            shutdown = true
-        elseif key == 'i'
-            # increase forward force
-            forward_force += f_step
-            @info "Target velocity: $forward_force"
-        elseif key == 'k'
-            # decrease forward force
-            forward_force -= f_step
-            @info "Target velocity: $forward_force"
-        elseif key == 'j'
-            # increase steering angle
-            steering_angle += s_step
-        elseif key == 'l'
-            # decrease steering angle
-            steering_angle -= s_step
-        end
-        cmd = VehicleCommand(steering_angle, forward_force, persist, shutdown)        
-        Serialization.serialize(socket, cmd)
-    end
-    #close(socket) # this should be closed by sim process
-end
-
-
 function wheel_control!(bodyid_to_wrench, chevy, t, state::MechanismState;
         reference_velocity=0.0, k₁=-1000.0)
     yaw = extract_yaw_from_quaternion(state.q[1:4])
@@ -67,7 +15,6 @@ function wheel_control!(bodyid_to_wrench, chevy, t, state::MechanismState;
     end
     nothing
 end
-
 
 function steering_control!(torques::AbstractVector, t, state::MechanismState;
         reference_angle=0.0, k₁=-6500.0, k₂=-2500.0)
