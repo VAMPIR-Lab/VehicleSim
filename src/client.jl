@@ -1,6 +1,6 @@
 struct VehicleCommand
     steering_angle::Float64
-    forward_force::Float64 # Rename to target_velocity or similar
+    velocity::Float64
     persist::Bool
     shutdown::Bool
 end
@@ -13,7 +13,7 @@ function get_c()
     c
 end
 
-function keyboard_client(host::IPAddr=IPv4(0), port=4444; f_step = 1.0, s_step = π/10)
+function keyboard_client(host::IPAddr=IPv4(0), port=4444; v_step = 1.0, s_step = π/10)
     socket = Sockets.connect(host, port)
     (peer_host, peer_port) = getpeername(socket)
     msg = deserialize(socket) # Visualization info
@@ -24,7 +24,7 @@ function keyboard_client(host::IPAddr=IPv4(0), port=4444; f_step = 1.0, s_step =
         state_msg = deserialize(socket)
     end
     
-    forward_force = 0.0
+    target_velocity = 0.0
     steering_angle = 0.0
     persist = true
     shutdown = false
@@ -38,22 +38,24 @@ function keyboard_client(host::IPAddr=IPv4(0), port=4444; f_step = 1.0, s_step =
             # shutdown server
             shutdown = true
         elseif key == 'i'
-            # increase forward force
-            forward_force += f_step
-            @info "Target velocity: $forward_force"
+            # increase target velocity
+            target_velocity += v_step
+            @info "Target velocity: $target_velocity"
         elseif key == 'k'
             # decrease forward force
-            forward_force -= f_step
-            @info "Target velocity: $forward_force"
+            target_velocity -= v_step
+            @info "Target velocity: $target_velocity"
         elseif key == 'j'
             # increase steering angle
             steering_angle += s_step
+            @info "Target steering angle: $steering_angle"
         elseif key == 'l'
             # decrease steering angle
             steering_angle -= s_step
+            @info "Target steering angle: $steering_angle"
         end
-        cmd = VehicleCommand(steering_angle, forward_force, persist, shutdown)        
-        Serialization.serialize(socket, cmd)
+        cmd = VehicleCommand(steering_angle, target_velocity, persist, shutdown)        
+        serialize(socket, cmd)
     end
 end
 
