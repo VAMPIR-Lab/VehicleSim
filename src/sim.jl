@@ -58,7 +58,7 @@ function vis_updater(mvisualizers, channels;
     end
 end
 
-function server(max_clients=4, host::IPAddr = IPv4(0), port=4444; full_state=true)
+function server(max_clients=4, host::IPAddr = ip"127.0.0.1", port=4444; full_state=true)
     map = training_map()
     server_visualizer = get_vis(map, true, host)
     inform_hostport(server_visualizer, "Server visualizer")
