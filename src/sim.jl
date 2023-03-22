@@ -58,9 +58,11 @@ function vis_updater(mvisualizers, channels;
     end
 end
 
-function server(max_clients=4, host::IPAddr = ip"127.0.0.1", port=4444; full_state=true)
+function server(max_clients=4, port=4444; full_state=true)
+    host = getipaddr()
     map = training_map()
     server_visualizer = get_vis(map, true, host)
+    @info "Server can be connected to at $host and port $port"
     @info inform_hostport(server_visualizer, "Server visualizer")
     client_visualizers = [get_vis(map, false, host) for _ in 1:max_clients]
     all_visualizers = [client_visualizers; server_visualizer]
@@ -71,7 +73,7 @@ function server(max_clients=4, host::IPAddr = ip"127.0.0.1", port=4444; full_sta
     chevy_joints = joints(chevy_base)
 
     vehicle_count = 0
-    sim_task = errormonitor(@async begin
+    #sim_task = errormonitor(@async begin
         server = listen(host, port)
         while true
             try
@@ -86,7 +88,7 @@ function server(max_clients=4, host::IPAddr = ip"127.0.0.1", port=4444; full_sta
                 break
             end
         end
-    end)
+    #end)
 end
 
 function spawn_car(visualizers, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_id, server; full_state=false)
@@ -109,6 +111,7 @@ function spawn_car(visualizers, sock, chevy_base, chevy_visuals, chevy_joints, v
     persist = true
     shutdown = false
     set_reference! = (cmd) -> begin
+        @info "Received command"
         if !cmd.persist 
             @info "Destroying vehicle."
             close(sock)
@@ -118,7 +121,7 @@ function spawn_car(visualizers, sock, chevy_base, chevy_visuals, chevy_joints, v
             close(sock)
         end
             
-        v = cmd.forward_force # rename
+        v = cmd.velocity # rename
         θ = cmd.steering_angle
         shutdown=cmd.shutdown
         persist=cmd.persist
