@@ -53,6 +53,13 @@ function vis_updater(mvisualizers, channels;
     end
 end
 
+function load_mechanism()
+    urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
+    chevy_base = parse_urdf(urdf_path, floating=true)
+    chevy_joints = joints(chevy_base)
+    (; urdf_path, chevy_base, chevy_joints)
+end
+
 function server(max_clients=4, port=4444; full_state=true)
     host = getipaddr()
     map = training_map()
@@ -62,10 +69,8 @@ function server(max_clients=4, port=4444; full_state=true)
     client_visualizers = [get_vis(map, false, host) for _ in 1:max_clients]
     all_visualizers = [client_visualizers; server_visualizer]
 
-    urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
-    chevy_base = parse_urdf(urdf_path, floating=true)
+    (; urdf_path, chevy_base, chevy_joints) = load_mechanism()
     chevy_visuals = URDFVisuals(urdf_path, package_path=[dirname(pathof(VehicleSim))])
-    chevy_joints = joints(chevy_base)
 
     vehicle_count = 0
     sim_task = errormonitor(@async begin
