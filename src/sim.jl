@@ -1,8 +1,3 @@
-struct VehicleState
-    q::Vector{Float64}
-    v::Vector{Float64}
-    persist::Bool
-end
 
 struct EndOfSimException <: Exception end
 struct EndOfVehicleException <: Exception end
@@ -73,7 +68,7 @@ function server(max_clients=4, port=4444; full_state=true)
     chevy_joints = joints(chevy_base)
 
     vehicle_count = 0
-    #sim_task = errormonitor(@async begin
+    sim_task = errormonitor(@async begin
         server = listen(host, port)
         while true
             try
@@ -88,7 +83,7 @@ function server(max_clients=4, port=4444; full_state=true)
                 break
             end
         end
-    #end)
+    end)
 end
 
 function spawn_car(visualizers, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_id, server; full_state=false)
@@ -148,8 +143,9 @@ function spawn_car(visualizers, sock, chevy_base, chevy_visuals, chevy_joints, v
     end 
  
     @async while isopen(sock)
-        state_msg = VehicleState(state_q, state_v, true)
-        serialize(sock, state_msg)
+        ground_truth_msg = GroundTruthMeasurement(state_q, state_v)
+        meas_msg = MeasurementMessage([ground_truth_msg,])
+        serialize(sock, meas_msg)
     end
 
     try 

@@ -1,6 +1,7 @@
 module VehicleSim
 
 using ColorTypes
+using Dates
 using GeometryBasics
 using MeshCat
 using MeshCatMechanisms
@@ -20,6 +21,7 @@ include("sim.jl")
 include("client.jl")
 include("control.jl")
 include("sink.jl")
+include("measurements.jl")
 include("map.jl")
 
 export view_car, sim_car, simulate, test_simulate, get_vis, server, CarConfig, example_client, keyboard_client

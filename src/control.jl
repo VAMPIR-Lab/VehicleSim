@@ -28,7 +28,7 @@ function steering_control!(torques::AbstractVector, t, state::MechanismState;
     torques[velocity_range(state, linkage_right)] .= k₁ * (configuration(state, linkage_right) .- reference_angle) + k₂ * velocity(state, linkage_right)
 end
 
-function suspension_control!(torques::AbstractVector, t, state::MechanismState; k₁=-6500.0, k₂=-2500.0, k₃ = -25000.0, k₄=-10000.0)
+function suspension_control!(torques::AbstractVector, t, state::MechanismState; k₁=-6500.0, k₂=-2500.0, k₃ = -30000.0, k₄=-15000.0)
     js = joints(state.mechanism)
     front_axle_mount = js[2]
     rear_axle_mount = js[3]
@@ -40,5 +40,3 @@ function suspension_control!(torques::AbstractVector, t, state::MechanismState; 
     torques[velocity_range(state, front_axle_roll)] .= k₃ * configuration(state, front_axle_roll) + k₄ * velocity(state, front_axle_roll)
     torques[velocity_range(state, rear_axle_roll)] .= k₃ * configuration(state, rear_axle_roll) + k₄ * velocity(state, rear_axle_roll)
 end
-
-
