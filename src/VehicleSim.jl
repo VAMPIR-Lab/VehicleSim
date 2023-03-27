@@ -5,6 +5,7 @@ using Dates
 using GeometryBasics
 using MeshCat
 using MeshCatMechanisms
+using Random
 using RigidBodyDynamics
 using Infiltrator
 using LinearAlgebra

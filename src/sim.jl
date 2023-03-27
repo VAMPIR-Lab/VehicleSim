@@ -60,35 +60,68 @@ function load_mechanism()
     (; urdf_path, chevy_base, chevy_joints)
 end
 
-function server(max_clients=4, port=4444; full_state=true)
+function server(max_vehicles=1, port=4444; full_state=true, rng=MersenneTwister(1))
     host = getipaddr()
     map = training_map()
     server_visualizer = get_vis(map, true, host)
     @info "Server can be connected to at $host and port $port"
     @info inform_hostport(server_visualizer, "Server visualizer")
-    client_visualizers = [get_vis(map, false, host) for _ in 1:max_clients]
+    client_visualizers = [get_vis(map, false, host) for _ in 1:max_vehicles]
     all_visualizers = [client_visualizers; server_visualizer]
 
     (; urdf_path, chevy_base, chevy_joints) = load_mechanism()
     chevy_visuals = URDFVisuals(urdf_path, package_path=[dirname(pathof(VehicleSim))])
 
-    vehicle_count = 0
-    sim_task = errormonitor(@async begin
-        server = listen(host, port)
+    viable_segments = Set(keys(map))
+    vehicles = Dict()
+    for vehicle_id in 1:max_vehicles
+        local seg
         while true
-            try
-                sock = accept(server)
-                vehicle_count += 1
-                msg = inform_hostport(client_visualizers[vehicle_count], "Client follow-cam")
-                @info "Client accepted."
-                # open(client_visualizers[vehicle_count])
-                serialize(sock, msg)
-                errormonitor(@async spawn_car(all_visualizers, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_count, server; full_state))
-            catch e
+            seg_id = rand(rng, viable_segments)
+            delete!(viable_segments, seg_id)
+            if contains_lane_type(map[seg_id], intersection, stop_sign)
+                continue
+            else
+                seg = map[seg_id]
                 break
-            end
+            end 
         end
-    end)
+        vehicle = spawn_car_on_map(all_visualizers, seg, chevy_base, chevy_visuals, chevy_joints, vehicle_id)
+        vehicles[vehicle_id] = vehicle
+    end
+
+    #vehicle_count = 0
+    #sim_task = errormonitor(@async begin
+    #    server = listen(host, port)
+    #    while true
+    #        try
+    #            sock = accept(server)
+    #            vehicle_count += 1
+    #            msg = inform_hostport(client_visualizers[vehicle_count], "Client follow-cam")
+    #            @info "Client accepted."
+    #            # open(client_visualizers[vehicle_count])
+    #            serialize(sock, msg)
+    #            errormonitor(@async spawn_car(all_visualizers, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_count, server; full_state))
+    #        catch e
+    #            break
+    #        end
+    #    end
+    #end)
+end
+
+function spawn_car_on_map(visualizers, seg, chevy_base, chevy_visuals, chevy_joints, vehicle_id)
+    chevy = deepcopy(chevy_base)
+    chevy.graph.vertices[2].name="chevy_$vehicle_id"
+    configure_contact_points!(chevy)
+    state = MechanismState(chevy)
+
+    mviss = map(visualizers) do vis
+        MechanismVisualizer(chevy, chevy_visuals, vis)
+    end
+ 
+    config = get_initialization_point(seg)
+    foreach(mvis->configure_car!(mvis, state, joints(chevy), config), mviss)
+    (; chevy, state, mviss)
 end
 
 function spawn_car(visualizers, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_id, server; full_state=false)

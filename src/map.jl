@@ -260,6 +260,61 @@ function generate_road_segment_mesh(seg; lane_width=0.3, poly_res=1.0)
     meshes
 end
 
+function contains_lane_type(seg, types...)
+    return any(lane_type ∈ types for lane_type in seg.lane_types)
+end
+
+function get_initialization_point(seg)
+    lb_1 = seg.lane_boundaries[1]
+    lb_2 = seg.lane_boundaries[2]
+
+    pt_a = lb_1.pt_a
+    pt_b = lb_1.pt_b
+    pt_c = lb_2.pt_a
+    pt_d = lb_2.pt_b
+
+    curvature = lb_1.curvature
+    curved = !isapprox(curvature, 0.0; atol=1e-6)
+    delta = pt_b-pt_a
+    if !curved
+        pt = 0.25*(pt_a+pt_b+pt_c+pt_d)
+        yaw = atan(delta[2], delta[1])
+    else
+        rad = 1.0 / abs(curvature)
+        dist = π*rad/2.0
+        left = curvature > 0
+        if left
+            if sign(delta[1]) == sign(delta[2])
+                center = pt_a + [0, delta[2]]
+            else
+                center = pt_a + [delta[1], 0]
+            end
+        else
+            if sign(delta[1]) == sign(delta[2])
+                center = pt_a + [delta[1], 0]
+            else
+                center = pt_a + [0, delta[2]]
+            end
+        end
+        pt_a_rel = pt_a - center
+        pt_b_rel = pt_b - center
+
+        θ0 = atan(pt_a_rel[2], pt_a_rel[1])
+        θT = atan(pt_b_rel[2], pt_b_rel[1])
+
+        θ = 0.5*(θ0 + θT)
+
+        rad_1 = rad
+        rad_2 = abs(pt_d[1]-pt_c[1])
+
+        rad = 0.5*(rad_1+rad_2)
+
+        pt = center + rad*[cos(θ), sin(θ)]
+        yaw = left ? θ + π/2 : θ - π/2
+    end
+    CarConfig(SVector(pt[1], pt[2], 3.25), 0, 0, yaw, 0)
+end
+
 function training_map(; lane_width = 10.0,
                         speed_limit = 10.0,
                         pullout_length = 40.0,
