@@ -47,10 +47,11 @@ end
 lane_boundaries are in order from left to right
 """
 mutable struct RoadSegment
+    id::Int
     lane_boundaries::Vector{LaneBoundary}
     lane_types::Vector{LaneTypes}
     speed_limit::Float64
-    children::Vector{RoadSegment}
+    children::Vector{Int}
 end
 
 """
@@ -232,13 +233,13 @@ end
 
 function view_map(vis, all_segs)
     delete!(vis["Grid"])
-    for (e, seg) in enumerate(all_segs)
+    for (id, seg) in all_segs
         meshes = generate_road_segment_mesh(seg)
-        for (id, m) in meshes
+        for (mesh_id, m) in meshes
             if isnothing(m)
                 continue
             end
-            setobject!(vis["map"]["$e"][id], m)
+            setobject!(vis["map"]["$id"][mesh_id], m)
         end
     end
 end
@@ -272,7 +273,7 @@ function training_map(; lane_width = 10.0,
     shortened_block_length = block_length - 2*(turn_r-int_r)
     single_shortened_block_length = block_length - (turn_r-int_r)
 
-    all_segs = RoadSegment[]
+    all_segs = Dict{Int, RoadSegment}()
 
     segs_I = add_fourway_intersection!(all_segs, nothing, nothing; intersection_curvature, speed_limit, lane_width)
     segs = add_straight_segments!(all_segs, segs_I, west; length=block_length, speed_limit, stop_outbound=true, stop_inbound=true)
@@ -302,8 +303,8 @@ function training_map(; lane_width = 10.0,
 end
 
 function add_segments!(all_segs, base, direction, segs)
-    foreach(s->s.children=segs.origins[opposite(direction)], base.sinks[direction])
-    foreach(s->s.children=base.origins[direction], segs.sinks[opposite(direction)])
+    foreach(id->all_segs[id].children=segs.origins[opposite(direction)], base.sinks[direction])
+    foreach(id->all_segs[id].children=base.origins[direction], segs.sinks[opposite(direction)])
     segs
 end
 
@@ -327,9 +328,9 @@ function add_curved_segments!(all_segs, base, direction, turn_left; turn_curvatu
     else
         dir_sinks = base.sinks[direction]
         dir_origins = base.origins[direction]
-        pt_a = ((dir_origins |> first).lane_boundaries[2]).pt_a
-        pt_b = ((dir_origins |> first).lane_boundaries[1]).pt_a
-        pt_c = ((dir_sinks |> first).lane_boundaries[2]).pt_b
+        pt_a = (all_segs[first(dir_origins)].lane_boundaries[2]).pt_a
+        pt_b = (all_segs[first(dir_origins)].lane_boundaries[1]).pt_a
+        pt_c = (all_segs[first(dir_sinks)].lane_boundaries[2]).pt_b
     end
     inside_rad = 1.0 / turn_curvature
     middle_rad = inside_rad + lane_width
@@ -346,50 +347,47 @@ function add_curved_segments!(all_segs, base, direction, turn_left; turn_curvatu
         pt_f = pt_c + lane_dir * inside_rad + right_dir * inside_rad
     end
 
+    seg_id = maximum(keys(all_segs); init=0)
+
     b1 = lane_boundary(pt_b, pt_e, true, true, turn_left)
     b2 = lane_boundary(pt_c, pt_f, true, true, turn_left)
-    seg_1 = RoadSegment([b1, b2], [standard,], speed_limit, Vector{RoadSegment}())
+    seg_1 = RoadSegment(seg_id+=1, [b1, b2], [standard,], speed_limit, [])
 
     b1 = lane_boundary(pt_e, pt_b, true, true, !turn_left)
     b2 = lane_boundary(pt_d, pt_a, true, true, !turn_left)
-    seg_2 = RoadSegment([b1, b2], [standard,], speed_limit, Vector{RoadSegment}())
+    seg_2 = RoadSegment(seg_id+=1, [b1, b2], [standard,], speed_limit, [])
 
     if !isnothing(base)
         seg_2.children = base.origins[direction]
-        foreach(s->s.children = [seg_1,], base.sinks[direction])
+        foreach(id->all_segs[id].children = [seg_1.id,], base.sinks[direction])
     end
-
-    push!(all_segs, seg_1)
-    push!(all_segs, seg_2)
+    all_segs[seg_1.id] = seg_1
+    all_segs[seg_2.id] = seg_2
     
-    sinks = Dict{Direction, Vector{RoadSegment}}()
-    origins = Dict{Direction, Vector{RoadSegment}}()
+    sinks = Dict{Direction, Vector{Int}}()
+    origins = Dict{Direction, Vector{Int}}()
+    origins[end_direction] = [seg_2.id,]
+    sinks[end_direction] = [seg_1.id,]
 
-    origins[end_direction] = [seg_2,]
-    sinks[end_direction] = [seg_1,]
     (; sinks, origins)
 end
 
 function add_T_intersection!(all_segs, base, direction, T_direction; intersection_curvature=0.25, lane_width=5.0, speed_limit=7.5)
-    temp_segs = []
-    segs = add_fourway_intersection!(temp_segs, base, direction; intersection_curvature, lane_width, speed_limit)
-    for seg in segs.origins[opposite(T_direction)]
-        filter!(s->s!=seg, temp_segs)
-        for (dir, ssegs) in segs.sinks
-            dir == opposite(T_direction) && continue
-            filter!(s->s!=seg, ssegs)
+    segs = add_fourway_intersection!(all_segs, base, direction; intersection_curvature, lane_width, speed_limit)
+    for id in segs.origins[opposite(T_direction)]
+        delete!(all_segs, id)
+        for (dir, seg_ids) in segs.sinks
+            filter!(sid->sid!=id, seg_ids)
         end
     end
-    for seg in segs.sinks[opposite(T_direction)]
-        filter!(s->s!=seg, temp_segs)
-        for (dir, osegs) in segs.origins
-            dir == opposite(T_direction) && continue
-            filter!(s->s!=seg, osegs)
+    for id in segs.sinks[opposite(T_direction)]
+        delete!(all_segs, id)
+        for (dir, seg_ids) in segs.origins
+            filter!(sid->sid!=id, seg_ids)
         end
     end
     delete!(segs.origins, opposite(T_direction))
     delete!(segs.sinks, opposite(T_direction))
-    append!(all_segs, temp_segs)
     segs
 end
 
@@ -427,9 +425,9 @@ function add_double_segments!(all_segs, base, direction; taper=1, length=5.0, sp
     else
         dir_sinks = base.sinks[direction]
         dir_origins = base.origins[direction]
-        pt_a = ((dir_origins |> first).lane_boundaries[2]).pt_a
-        pt_b = ((dir_origins |> first).lane_boundaries[1]).pt_a
-        pt_c = ((dir_sinks |> first).lane_boundaries[2]).pt_b
+        pt_a = (all_segs[first(dir_origins)].lane_boundaries[2]).pt_a
+        pt_b = (all_segs[first(dir_origins)].lane_boundaries[1]).pt_a
+        pt_c = (all_segs[first(dir_sinks)].lane_boundaries[2]).pt_b
     end
 
     pt_d = pt_a + lane_dir * length
@@ -440,6 +438,8 @@ function add_double_segments!(all_segs, base, direction; taper=1, length=5.0, sp
     pt_c_r = pt_c + right_dir * lane_width
     pt_d_l = pt_d - right_dir * lane_width
     pt_f_r = pt_f + right_dir * lane_width
+
+    seg_id = maximum(keys(all_segs); init=0)
 
     b1 = LaneBoundary(pt_b, pt_e, 0.0, true, true)
     if pullout_outbound
@@ -452,10 +452,10 @@ function add_double_segments!(all_segs, base, direction; taper=1, length=5.0, sp
             b3 = LaneBoundary(pt_c_r, pt_f, 0.0, true, true)
         end
         outbound_types = [standard, loading_zone]
-        seg_1 = RoadSegment([b1,b2,b3], outbound_types, speed_limit, Vector{RoadSegment}())
+        seg_1 = RoadSegment(seg_id+=1, [b1,b2,b3], outbound_types, speed_limit, [])
     else
         b2 = LaneBoundary(pt_c, pt_f, 0.0, true, true)
-        seg_1 = RoadSegment([b1, b2], [standard,], speed_limit, Vector{RoadSegment}())
+        seg_1 = RoadSegment(seg_id+=1, [b1, b2], [standard,], speed_limit, [])
     end
 
     b1 = LaneBoundary(pt_e, pt_b, 0.0, true, true)
@@ -469,23 +469,24 @@ function add_double_segments!(all_segs, base, direction; taper=1, length=5.0, sp
             b3 = LaneBoundary(pt_d, pt_a_l, 0.0, true, true)
         end
         inbound_types = [standard, loading_zone]
-        seg_2 = RoadSegment([b1, b2, b3], inbound_types, speed_limit, Vector{RoadSegment}())
+        seg_2 = RoadSegment(seg_id+=1, [b1, b2, b3], inbound_types, speed_limit, [])
     else
         b2 = LaneBoundary(pt_d, pt_a, 0.0, true, true)
-        seg_2 = RoadSegment([b1, b2, b3], [standard,], speed_limit, Vector{RoadSegment}())
+        seg_2 = RoadSegment(seg_id+=1, [b1, b2, b3], [standard,], speed_limit, [])
     end
     
     if !isnothing(base)
         seg_2.children = base.origins[direction]
-        foreach(s->s.children = [seg_1,], base.sinks[direction])
+        foreach(id->all_segs[id].children = [seg_1.id,], base.sinks[direction])
     end
-    push!(all_segs, seg_1)
-    push!(all_segs, seg_2)
+    all_segs[seg_1.id] = seg_1
+    all_segs[seg_2.id] = seg_2
     
-    sinks = Dict{Direction, Vector{RoadSegment}}()
-    origins = Dict{Direction, Vector{RoadSegment}}()
-    origins[direction] = [seg_2,]
-    sinks[direction] = [seg_1,]
+    sinks = Dict{Direction, Vector{Int}}()
+    origins = Dict{Direction, Vector{Int}}()
+    origins[direction] = [seg_2.id,]
+    sinks[direction] = [seg_1.id,]
+
     (; sinks, origins)
 end
 
@@ -508,36 +509,38 @@ function add_straight_segments!(all_segs, base, direction; length=40.0, speed_li
     else
         dir_sinks = base.sinks[direction]
         dir_origins = base.origins[direction]
-        pt_a = ((dir_origins |> first).lane_boundaries[2]).pt_a
-        pt_b = ((dir_origins |> first).lane_boundaries[1]).pt_a
-        pt_c = ((dir_sinks |> first).lane_boundaries[2]).pt_b
+        pt_a = (all_segs[first(dir_origins)].lane_boundaries[2]).pt_a
+        pt_b = (all_segs[first(dir_origins)].lane_boundaries[1]).pt_a
+        pt_c = (all_segs[first(dir_sinks)].lane_boundaries[2]).pt_b
     end
 
     pt_d = pt_a + lane_dir * length
     pt_e = pt_b + lane_dir * length
     pt_f = pt_c + lane_dir * length
+    
+    seg_id = maximum(keys(all_segs); init=0)
 
     b1 = LaneBoundary(pt_b, pt_e, 0.0, true, true)
     b2 = LaneBoundary(pt_c, pt_f, 0.0, true, true)
     outbound_type = stop_outbound ? stop_sign : standard
-    seg_1 = RoadSegment([b1, b2], [outbound_type,], speed_limit, Vector{RoadSegment}())
+    seg_1 = RoadSegment(seg_id+=1, [b1, b2], [outbound_type,], speed_limit, [])
 
     b1 = LaneBoundary(pt_e, pt_b, 0.0, true, true)
     b2 = LaneBoundary(pt_d, pt_a, 0.0, true, true)
     inbound_type = stop_inbound ? stop_sign : standard
-    seg_2 = RoadSegment([b1, b2], [inbound_type], speed_limit, Vector{RoadSegment}())
+    seg_2 = RoadSegment(seg_id+=1, [b1, b2], [inbound_type], speed_limit, [])
 
     if !isnothing(base)
         seg_2.children = base.origins[direction]
-        foreach(s->s.children = [seg_1,], base.sinks[direction])
+        foreach(id->all_segs[id].children = [seg_1.id,], base.sinks[direction])
     end
-    push!(all_segs, seg_1)
-    push!(all_segs, seg_2)
+    all_segs[seg_1.id] = seg_1
+    all_segs[seg_2.id] = seg_2
     
-    sinks = Dict{Direction, Vector{RoadSegment}}()
-    origins = Dict{Direction, Vector{RoadSegment}}()
-    origins[direction] = [seg_2,]
-    sinks[direction] = [seg_1,]
+    sinks = Dict{Direction, Vector{Int}}()
+    origins = Dict{Direction, Vector{Int}}()
+    origins[direction] = [seg_2.id,]
+    sinks[direction] = [seg_1.id,]
     (; sinks, origins)
 end
 
@@ -551,13 +554,13 @@ function add_fourway_intersection!(all_segs, base, direction; intersection_curva
         prev_origins = base.origins[direction]
 
         if direction == north
-            offset = (prev_sinks |> first).lane_boundaries[1].pt_b + SVector(-r-lw, 0.0)
+            offset = all_segs[first(prev_sinks)].lane_boundaries[1].pt_b + SVector(-r-lw, 0.0)
         elseif direction == east
-            offset = (prev_sinks |> first).lane_boundaries[2].pt_b + SVector(0.0, -r)
+            offset = all_segs[first(prev_sinks)].lane_boundaries[2].pt_b + SVector(0.0, -r)
         elseif direction == south
-            offset = (prev_sinks |> first).lane_boundaries[2].pt_b + SVector(-r, -2*lw -2r)
+            offset = all_segs[first(prev_sinks)].lane_boundaries[2].pt_b + SVector(-r, -2*lw -2r)
         elseif direction == west
-            offset = (prev_sinks |> first).lane_boundaries[1].pt_b + SVector(-2*lw - 2*r, -r-lw)
+            offset = all_segs[first(prev_sinks)].lane_boundaries[1].pt_b + SVector(-2*lw - 2*r, -r-lw)
         end
     end
     pt_a = offset+SVector(r, 0.0)
@@ -576,74 +579,77 @@ function add_fourway_intersection!(all_segs, base, direction; intersection_curva
     pt_k = offset+SVector(0.0, lw+r)
     pt_l = offset+SVector(0.0, r)
 
+    seg_id = maximum(keys(all_segs); init=0)
+
     # South origins
     b1 = lane_boundary(pt_b, pt_k, true, false, true)
     b2 = lane_boundary(pt_c, pt_j, true, false, true)
-    seg_1 = RoadSegment([b1, b2], [intersection,], speed_limit, Vector{RoadSegment}())
+    seg_1 = RoadSegment(seg_id+=1, [b1, b2], [intersection,], speed_limit, [])
 
     b1 = lane_boundary(pt_b, pt_h, true, false) 
     b2 = lane_boundary(pt_c, pt_g, true, false) 
-    seg_2 = RoadSegment([b1, b2], [intersection,], speed_limit, Vector{RoadSegment}())
+    seg_2 = RoadSegment(seg_id+=1, [b1, b2], [intersection,], speed_limit, [])
 
     b1 = lane_boundary(pt_b, pt_e, true, false, false) 
     b2 = lane_boundary(pt_c, pt_d, true, true, false) 
-    seg_3 = RoadSegment([b1, b2], [intersection,], speed_limit, Vector{RoadSegment}())
+    seg_3 = RoadSegment(seg_id+=1, [b1, b2], [intersection,], speed_limit, [])
    
     # East origins
     b1 = lane_boundary(pt_e, pt_b, true, false, true)
     b2 = lane_boundary(pt_f, pt_a, true, false, true)
-    seg_4 = RoadSegment([b1, b2], [intersection,], speed_limit, Vector{RoadSegment}())
+    seg_4 = RoadSegment(seg_id+=1, [b1, b2], [intersection,], speed_limit, [])
 
     b1 = lane_boundary(pt_e, pt_k, true, false) 
     b2 = lane_boundary(pt_f, pt_j, true, false) 
-    seg_5 = RoadSegment([b1, b2], [intersection,], speed_limit, Vector{RoadSegment}())
+    seg_5 = RoadSegment(seg_id+=1, [b1, b2], [intersection,], speed_limit, [])
 
     b1 = lane_boundary(pt_e, pt_h, true, false, false) 
     b2 = lane_boundary(pt_f, pt_g, true, true, false) 
-    seg_6 = RoadSegment([b1, b2], [intersection,], speed_limit, Vector{RoadSegment}())
+    seg_6 = RoadSegment(seg_id+=1, [b1, b2], [intersection,], speed_limit, [])
     
     # North origins
     b1 = lane_boundary(pt_h, pt_e, true, false, true)
     b2 = lane_boundary(pt_i, pt_d, true, false, true)
-    seg_7 = RoadSegment([b1, b2], [intersection,], speed_limit, Vector{RoadSegment}())
+    seg_7 = RoadSegment(seg_id+=1, [b1, b2], [intersection,], speed_limit, [])
 
     b1 = lane_boundary(pt_h, pt_b, true, false) 
     b2 = lane_boundary(pt_i, pt_a, true, false) 
-    seg_8 = RoadSegment([b1, b2], [intersection,], speed_limit, Vector{RoadSegment}())
+    seg_8 = RoadSegment(seg_id+=1, [b1, b2], [intersection,], speed_limit, [])
 
     b1 = lane_boundary(pt_h, pt_k, true, false, false) 
     b2 = lane_boundary(pt_i, pt_j, true, true, false) 
-    seg_9 = RoadSegment([b1, b2], [intersection,], speed_limit, Vector{RoadSegment}())
+    seg_9 = RoadSegment(seg_id+=1, [b1, b2], [intersection,], speed_limit, [])
     
     # West origins
     b1 = lane_boundary(pt_k, pt_h, true, false, true)
     b2 = lane_boundary(pt_l, pt_g, true, false, true)
-    seg_10 = RoadSegment([b1, b2], [intersection,], speed_limit, Vector{RoadSegment}())
+    seg_10 = RoadSegment(seg_id+=1, [b1, b2], [intersection,], speed_limit, [])
 
     b1 = lane_boundary(pt_k, pt_e, true, false) 
     b2 = lane_boundary(pt_l, pt_d, true, false) 
-    seg_11 = RoadSegment([b1, b2], [intersection,], speed_limit, Vector{RoadSegment}())
+    seg_11 = RoadSegment(seg_id+=1, [b1, b2], [intersection,], speed_limit, [])
 
     b1 = lane_boundary(pt_k, pt_b, true, false, false) 
     b2 = lane_boundary(pt_l, pt_a, true, true, false) 
-    seg_12 = RoadSegment([b1, b2], [intersection,], speed_limit, Vector{RoadSegment}())
-
-    append!(all_segs, [seg_1, seg_2, seg_3, seg_4, seg_5, seg_6, seg_7, seg_8, seg_9, seg_10, seg_11, seg_12])
+    seg_12 = RoadSegment(seg_id+=1, [b1, b2], [intersection,], speed_limit, [])
     
-    sinks = Dict{Direction, Vector{RoadSegment}}()
-    origins = Dict{Direction, Vector{RoadSegment}}()
-    origins[south] = [seg_1, seg_2, seg_3]
-    sinks[south] = [seg_4, seg_8, seg_12]
-    origins[east] = [seg_4, seg_5, seg_6]
-    sinks[east] = [seg_3, seg_7, seg_11]
-    origins[north] = [seg_7, seg_8, seg_9]
-    sinks[north] = [seg_2, seg_6, seg_10]
-    origins[west] = [seg_10, seg_11, seg_12]
-    sinks[west] = [seg_1, seg_5, seg_9]
+    foreach(seg->all_segs[seg.id]=seg, [seg_1, seg_2, seg_3, seg_4, seg_5, seg_6, seg_7, seg_8, seg_9, seg_10, seg_11, seg_12])
+
+    sinks = Dict{Direction, Vector{Int}}()
+    origins = Dict{Direction, Vector{Int}}()
+    origins[south] = [seg_1.id, seg_2.id, seg_3.id]
+    sinks[south] = [seg_4.id, seg_8.id, seg_12.id]
+    origins[east] = [seg_4.id, seg_5.id, seg_6.id]
+    sinks[east] = [seg_3.id, seg_7.id, seg_11.id]
+    origins[north] = [seg_7.id, seg_8.id, seg_9.id]
+    sinks[north] = [seg_2.id, seg_6.id, seg_10.id]
+    origins[west] = [seg_10.id, seg_11.id, seg_12.id]
+    sinks[west] = [seg_1.id, seg_5.id, seg_9.id]
+
 
     if !isnothing(base)
-        foreach(s->s.children = origins[opposite(direction)], base.sinks[direction])
-        foreach(s->s.children = base.origins[direction], sinks[opposite(direction)])
+        foreach(id->all_segs[id].children = origins[opposite(direction)], base.sinks[direction])
+        foreach(id->all_segs[id].children = base.origins[direction], sinks[opposite(direction)])
     end
 
     (; sinks, origins)
