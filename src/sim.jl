@@ -73,7 +73,13 @@ function server(max_vehicles=1, port=4444; full_state=true, rng=MersenneTwister(
     chevy_visuals = URDFVisuals(urdf_path, package_path=[dirname(pathof(VehicleSim))])
 
     viable_segments = Set(keys(map))
+    spawn_points = Dict()
     vehicles = Dict()
+
+    state_channels = Dict(id=>Channel{Tuple{Float64, MechanismState}}(1) for id in 1:max_vehicles)
+    cmd_channels = Dict(id=>Channel{VehicleCommand}(1) for id in 1:max_vehicles)
+    meas_channels = Dict(id=>Channel{MeasurementMessage}(1) for id in 1:max_vehicles)
+
     for vehicle_id in 1:max_vehicles
         local seg
         while true
@@ -84,31 +90,101 @@ function server(max_vehicles=1, port=4444; full_state=true, rng=MersenneTwister(
             else
                 seg = map[seg_id]
                 break
-            end 
+            end
         end
+        spawn_points[vehicle_id] = seg
         vehicle = spawn_car_on_map(all_visualizers, seg, chevy_base, chevy_visuals, chevy_joints, vehicle_id)
+        @async sim_car(all_visualizers, cmd_channels[vehicle_id], state_channels[vehicle_id], vehicle, vehicle_id)
         vehicles[vehicle_id] = vehicle
     end
+    @infiltrate
 
-    #vehicle_count = 0
-    #sim_task = errormonitor(@async begin
-    #    server = listen(host, port)
-    #    while true
-    #        try
-    #            sock = accept(server)
-    #            vehicle_count += 1
-    #            msg = inform_hostport(client_visualizers[vehicle_count], "Client follow-cam")
-    #            @info "Client accepted."
-    #            # open(client_visualizers[vehicle_count])
-    #            serialize(sock, msg)
-    #            errormonitor(@async spawn_car(all_visualizers, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_count, server; full_state))
-    #        catch e
-    #            break
-    #        end
-    #    end
-    #end)
+    @async measure_vehicles(state_channels, meas_channels, shutdown_channel)
+
+    shutdown_channel = Channel{Bool}(1)
+    client_connections = [false for _ in 1:max_vehicles]
+
+    client_count = 0
+    sim_task = errormonitor(@async begin
+        server = listen(host, port)
+        @async begin
+            while true
+                if isready(shutdown_channel)
+                    shutdown = fetch(shutdown_channel)
+                    if shutdown
+                        close(server)
+                        break
+                    end
+                end
+                sleep(0.1)
+            end
+        end
+        while true
+            try
+                sock = accept(server)
+                @info "Client accepted."
+                client_count = mod1(client_count+1, max_vehicles)
+                if client_connections[client_count]
+                    @error "Requested vehicle already in use!"
+                    close(sock)
+                    break
+                end
+                serialize(sock, inform_hostport(client_visualizers[client_count], "Client follow-cam"))
+                let vehicle_id=client_count
+                    @async begin
+                        while isopen(sock)
+                            car_cmd = deserialize(sock)
+                            put!(cmd_channels[vehicle_id], car_cmd)
+                            if !car_cmd.controlled
+                                close(sock)
+                            end
+                        end
+                    end
+                    @async begin
+                        while isopen(sock)
+                            msg = take!(meas_channels[vehicle_id])
+                            serialize(sock, msg)
+                        end
+                    end  
+                end
+                #@info "Client accepted."
+                #let client_count=client_count
+                #    errormonitor(@async begin
+                #        active_simulations[client_count] = true
+                #        sim_car(all_visualizers, 
+                #                sock, 
+                #                sim_channels[client_count], 
+                #                vehicles[client_count], 
+                #                client_count, 
+                #                server)
+                #        active_simulations[client_count] = false
+                #        reset_vehicle!(vehicles[client_count], spawn_points[client_count])
+                #    end)
+                #end
+            catch e
+                @info "Shutting down server."
+                close(server)
+                break
+            end
+        end
+    end)
+    shutdown_channel
 end
 
+function shutdown!(shutdown_channel)
+    put!(shutdown_channel, true)
+    nothing
+end
+
+function reset_vehicle!(vehicle, seg)
+    mviss = vehicle.mviss
+    chevy = vehicle.chevy
+    state = vehicle.state
+
+    config = get_initialization_point(seg)
+    foreach(mvis->configure_car!(mvis, state, joints(chevy), config), mviss)
+end
+    
 function spawn_car_on_map(visualizers, seg, chevy_base, chevy_visuals, chevy_joints, vehicle_id)
     chevy = deepcopy(chevy_base)
     chevy.graph.vertices[2].name="chevy_$vehicle_id"
@@ -118,72 +194,48 @@ function spawn_car_on_map(visualizers, seg, chevy_base, chevy_visuals, chevy_joi
     mviss = map(visualizers) do vis
         MechanismVisualizer(chevy, chevy_visuals, vis)
     end
- 
-    config = get_initialization_point(seg)
-    foreach(mvis->configure_car!(mvis, state, joints(chevy), config), mviss)
-    (; chevy, state, mviss)
+
+    vehicle = (; chevy, state, mviss)
+    reset_vehicle!(vehicle, seg)
+    vehicle
 end
 
-function spawn_car(visualizers, sock, chevy_base, chevy_visuals, chevy_joints, vehicle_id, server; full_state=false)
-    chevy = deepcopy(chevy_base)
-    chevy.graph.vertices[2].name="chevy_$vehicle_id"
-    configure_contact_points!(chevy)
-    state = MechanismState(chevy)
+function sim_car(visualizers, cmd_channel, state_channel, vehicle, vehicle_id)
 
-    mviss = map(visualizers) do vis
-        MechanismVisualizer(chevy, chevy_visuals, vis)
-    end
+    chevy = vehicle.chevy
+    state = vehicle.state
+    mviss = vehicle.mviss
 
-    config = CarConfig(SVector(-7,12,2.5), 0.0, 0.0, 0.0, 0.0)
-    foreach(mvis->configure_car!(mvis, state, joints(chevy), config), mviss)
-    
     v = 0.0
-    θ = 0.0
-    state_q = state.q
-    state_v = state.v
-    persist = true
-    shutdown = false
+    δ = 0.0
+    controlled = false
+
     set_reference! = (cmd) -> begin
-        if !cmd.persist 
-            @info "Destroying vehicle."
-            close(sock)
-        end
-        if cmd.shutdown
-            @info "Shutting down server."
-            close(sock)
-        end
-            
         v = cmd.velocity # rename
-        θ = cmd.steering_angle
-        shutdown=cmd.shutdown
-        persist=cmd.persist
+        δ = cmd.steering_angle
+        controlled = cmd.controlled
     end
+
     control! = (torques, t, state) -> begin
             !persist && throw(EndOfVehicleException())
-            shutdown && throw(EndOfSimException())
             torques .= 0.0
-            steering_control!(torques, t, state; reference_angle=θ)
+            steering_control!(torques, t, state; reference_angle=δ)
             suspension_control!(torques, t, state)
-            nothing
     end
     wrenches! = (bodyid_to_wrench, t, state) -> begin
         RigidBodyDynamics.update_transforms!(state)
         wheel_control!(bodyid_to_wrench, chevy, t, state; reference_velocity=v)
     end
     publisher! = (t, state) -> begin
-        state_q .= state.q
-        state_v .= state.v
+        if isready(state_channel)
+            stale = take!(state_channel)
+        end
+        put!(state_channel, (t,state))
     end
 
-    @async while isopen(sock)
-        car_cmd = deserialize(sock)
+    @async while true
+        car_cmd = take!(cmd_channel)
         set_reference!(car_cmd)
-    end 
- 
-    @async while isopen(sock)
-        ground_truth_msg = GroundTruthMeasurement(state_q, state_v)
-        meas_msg = MeasurementMessage([ground_truth_msg,])
-        serialize(sock, meas_msg)
     end
 
     try 
@@ -197,9 +249,6 @@ function spawn_car(visualizers, sock, chevy_base, chevy_visuals, chevy_joints, v
                          max_realtime_rate=1.0)
     catch e
         foreach(mvis->delete_vehicle!(mvis), mviss)
-        if e isa EndOfSimException
-            close(server)
-        end
     end
 end
 

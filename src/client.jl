@@ -1,8 +1,7 @@
 struct VehicleCommand
     steering_angle::Float64
     velocity::Float64
-    persist::Bool
-    shutdown::Bool
+    controlled::Bool
 end
 
 function get_c()
@@ -22,21 +21,20 @@ function keyboard_client(host::IPAddr=IPv4(0), port=4444; v_step = 1.0, s_step =
     local state_msg
     @async while isopen(socket)
         state_msg = deserialize(socket)
+        @info "state msg received"
     end
     
     target_velocity = 0.0
     steering_angle = 0.0
-    persist = true
-    shutdown = false
-    @info "Press 'q' at any time to terminate vehicle. Press 's' to shutdown simulator server."
-    while persist && !shutdown && isopen(socket)
+    controlled = true
+    @info "Press 'q' at any time to terminate vehicle."
+    while controlled && isopen(socket)
         key = get_c()
         if key == 'q'
             # terminate vehicle
-            persist = false
-        elseif key == 's'
-            # shutdown server
-            shutdown = true
+            controlled = false
+            target_velocity = 0.0
+            steering_angle = 0.0
         elseif key == 'i'
             # increase target velocity
             target_velocity += v_step
@@ -54,7 +52,7 @@ function keyboard_client(host::IPAddr=IPv4(0), port=4444; v_step = 1.0, s_step =
             steering_angle -= s_step
             @info "Target steering angle: $steering_angle"
         end
-        cmd = VehicleCommand(steering_angle, target_velocity, persist, shutdown)        
+        cmd = VehicleCommand(steering_angle, target_velocity, controlled)
         serialize(socket, cmd)
     end
 end

@@ -19,6 +19,8 @@ end
 function remove_grid!(vis)
     delete!(vis["/Grid"])
     delete!(vis["/Axes"])
+    setcameratarget!(vis, [0,0,0])
+    setcameraposition!(vis, [0, -3, 1])
 end
 
 function configure_car!(mvis, state, joints, config)
@@ -47,10 +49,16 @@ function configure_car!(mvis, state, joints, config)
     s = s12*s3 - v12'*v3
     v = s12*v3+s3*v12+v12×v3
     q = [s; v]
+    
+    for joint in joints
+        set_velocity!(state, joint, zero(velocity(state, joint)))
+        set_configuration!(state, joint, zero(configuration(state, joint)))
+    end
 
     set_configuration!(state, wb, [q; config.position])
     set_configuration!(state, lsl, config.steering_angle)
     set_configuration!(state, rsl, config.steering_angle)
+    
     if !isnothing(mvis)
         set_configuration!(mvis, configuration(state))
     end
@@ -66,8 +74,8 @@ function delete_vehicle!(vis, vehicle)
     name = vehicle.graph.vertices[2].name
     path = "/meshcat/world/$name"
     delete!(vis[path])
-    #setcameratarget!(vis, [0,0,0])
-    #setcameraposition!(vis, [0, -3, 1])
+    setcameratarget!(vis, [0,0,0])
+    setcameraposition!(vis, [0, -3, 1])
     nothing
 end
 
