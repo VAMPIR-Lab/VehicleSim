@@ -45,4 +45,3 @@ end
 function extract_yaw_from_quaternion(q)
     atan(2(q[1]*q[4]+q[2]*q[3]), 1-2*(q[3]^2+q[4]^2))
 end
-

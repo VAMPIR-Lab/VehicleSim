@@ -62,7 +62,6 @@ function example_client(host::IPAddr=IPv4(0), port=4444)
     map_segments = training_map()
     (; chevy_base) = load_mechanism()
 
-    state_msg = VehicleState(zeros(13), zeros(12), false)
     @async while isopen(socket)
         state_msg = deserialize(socket)
     end

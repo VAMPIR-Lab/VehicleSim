@@ -6,6 +6,7 @@ using GeometryBasics
 using MeshCat
 using MeshCatMechanisms
 using Random
+using Rotations
 using RigidBodyDynamics
 using Infiltrator
 using LinearAlgebra

@@ -264,6 +264,16 @@ function contains_lane_type(seg, types...)
     return any(lane_type ∈ types for lane_type in seg.lane_types)
 end
 
+function identify_loading_segments(map)
+    target_segments = []
+    for (id, seg) in map
+        if contains_lane_type(seg, loading_zone)
+            push!(target_segments, id)
+        end
+    end
+    target_segments
+end
+
 function get_initialization_point(seg)
     lb_1 = seg.lane_boundaries[1]
     lb_2 = seg.lane_boundaries[2]

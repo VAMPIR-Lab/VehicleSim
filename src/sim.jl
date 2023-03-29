@@ -76,7 +76,7 @@ function server(max_vehicles=1, port=4444; full_state=true, rng=MersenneTwister(
     spawn_points = Dict()
     vehicles = Dict()
 
-    state_channels = Dict(id=>Channel{Tuple{Float64, MechanismState}}(1) for id in 1:max_vehicles)
+    state_channels = Dict(id=>Channel{MechanismState}(1) for id in 1:max_vehicles)
     cmd_channels = Dict(id=>Channel{VehicleCommand}(1) for id in 1:max_vehicles)
     meas_channels = Dict(id=>Channel{MeasurementMessage}(1) for id in 1:max_vehicles)
 
@@ -99,9 +99,10 @@ function server(max_vehicles=1, port=4444; full_state=true, rng=MersenneTwister(
     end
     @infiltrate
 
-    @async measure_vehicles(state_channels, meas_channels, shutdown_channel)
-
     shutdown_channel = Channel{Bool}(1)
+
+    @async measure_vehicles(map, vehicles, state_channels, meas_channels, shutdown_channel; rng)
+
     client_connections = [false for _ in 1:max_vehicles]
 
     client_count = 0
@@ -230,7 +231,7 @@ function sim_car(visualizers, cmd_channel, state_channel, vehicle, vehicle_id)
         if isready(state_channel)
             stale = take!(state_channel)
         end
-        put!(state_channel, (t,state))
+        put!(state_channel, state)
     end
 
     @async while true
