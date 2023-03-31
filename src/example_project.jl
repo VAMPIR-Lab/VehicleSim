@@ -71,6 +71,10 @@ function decision_making(localization_state_channel,
     end
 end
 
+function isfull(ch:Channel)
+    length(ch.data) ≥ ch.sz_max
+end
+
 
 function my_client(host::IPAddr=IPv4(0), port=4444)
     socket = Sockets.connect(host, port)
@@ -84,17 +88,22 @@ function my_client(host::IPAddr=IPv4(0), port=4444)
     localization_state_channel = Channel{MyLocalizationType}(1)
     perception_state_channel = Channel{MyPerceptionType}(1)
 
+    target_map_segment = 0 # (not a valid segment, will be overwritten by message)
+    ego_vehicle_id = 0 # (not a valid id, will be overwritten by message. This is used for discerning ground-truth messages)
+
     @async while true
         measurement_msg = deserialize(socket)
+        target_map_segment = meas.target_segment
+        ego_vehicle_id = meas.vehicle_id
         for meas in measurement_msg.measurements
             if meas isa GPSMeasurement
-                put!(gps_channel, meas)
+                !isfull(gps_channel) && put!(gps_channel, meas)
             elseif meas isa IMUMeasurement
-                put!(imu_channel, meas)
+                !isfull(imu_channel) && put!(imu_channel, meas)
             elseif meas isa CameraMeasurement
-                put!(cam_channel, meas)
+                !isfull(cam_channel) && put!(cam_channel, meas)
             elseif meas isa GroundTruthMeasurement
-                put!(gt_channel, meas)
+                !isfull(gt_channel) && put!(gt_channel, meas)
             end
         end
     end
