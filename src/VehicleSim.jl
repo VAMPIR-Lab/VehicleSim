@@ -5,6 +5,8 @@ using Dates
 using GeometryBasics
 using MeshCat
 using MeshCatMechanisms
+using Random
+using Rotations
 using RigidBodyDynamics
 using Infiltrator
 using LinearAlgebra
@@ -24,6 +26,6 @@ include("sink.jl")
 include("measurements.jl")
 include("map.jl")
 
-export view_car, sim_car, simulate, test_simulate, get_vis, server, CarConfig, example_client, keyboard_client
+export server, shutdown!, keyboard_client
 
 end

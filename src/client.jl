@@ -1,8 +1,7 @@
 struct VehicleCommand
     steering_angle::Float64
     velocity::Float64
-    persist::Bool
-    shutdown::Bool
+    controlled::Bool
 end
 
 function get_c()
@@ -19,24 +18,39 @@ function keyboard_client(host::IPAddr=IPv4(0), port=4444; v_step = 1.0, s_step =
     msg = deserialize(socket) # Visualization info
     @info msg
 
-    local state_msg
     @async while isopen(socket)
         state_msg = deserialize(socket)
+        measurements = state_msg.measurements
+        num_cam = 0
+        num_imu = 0
+        num_gps = 0
+        num_gt = 0
+        for meas in measurements
+            if meas isa GroundTruthMeasurement
+                num_gt += 1
+            elseif meas isa CameraMeasurement
+                num_cam += 1
+            elseif meas isa IMUMeasurement
+                num_imu += 1
+            elseif meas isa GPSMeasurement
+                num_gps += 1
+            end
+        end
+        @info "Measurements received: $num_gt gt; $num_cam cam; $num_imu imu; $num_gps gps"
     end
     
     target_velocity = 0.0
     steering_angle = 0.0
-    persist = true
-    shutdown = false
-    @info "Press 'q' at any time to terminate vehicle. Press 's' to shutdown simulator server."
-    while persist && !shutdown && isopen(socket)
+    controlled = true
+    @info "Press 'q' at any time to terminate vehicle."
+    while controlled && isopen(socket)
         key = get_c()
         if key == 'q'
             # terminate vehicle
-            persist = false
-        elseif key == 's'
-            # shutdown server
-            shutdown = true
+            controlled = false
+            target_velocity = 0.0
+            steering_angle = 0.0
+            @info "Terminating Keyboard Client."
         elseif key == 'i'
             # increase target velocity
             target_velocity += v_step
@@ -54,7 +68,7 @@ function keyboard_client(host::IPAddr=IPv4(0), port=4444; v_step = 1.0, s_step =
             steering_angle -= s_step
             @info "Target steering angle: $steering_angle"
         end
-        cmd = VehicleCommand(steering_angle, target_velocity, persist, shutdown)        
+        cmd = VehicleCommand(steering_angle, target_velocity, controlled)
         serialize(socket, cmd)
     end
 end
@@ -64,7 +78,6 @@ function example_client(host::IPAddr=IPv4(0), port=4444)
     map_segments = training_map()
     (; chevy_base) = load_mechanism()
 
-    state_msg = VehicleState(zeros(13), zeros(12), false)
     @async while isopen(socket)
         state_msg = deserialize(socket)
     end

@@ -16,16 +16,6 @@ mutable struct FollowCamSink <: RigidBodyDynamics.OdeIntegrators.OdeResultsSink
     end
 end
 
-#mutable struct PublisherSink <: RigidBodyDynamics.OdeIntegrators.OdeResultsSink
-#    channel::Channel{VehicleState}
-#    min_wall_Δt::Float64
-#    last_update_wall_time::Float64
-#
-#    function PublisherSink(channel; max_fps::Float64 = 60.)
-#        new(channel, 1 / max_fps, -Inf)
-#    end
-#end
-
 function RigidBodyDynamics.OdeIntegrators.initialize(sink::FollowCamSink, t, state)
     sink.last_update_wall_time = -Inf
     RigidBodyDynamics.OdeIntegrators.process(sink, t, state)
@@ -52,16 +42,6 @@ function RigidBodyDynamics.OdeIntegrators.process(sink::FollowCamSink, t, state)
     nothing
 end
 
-#function RigidBodyDynamics.OdeIntegrators.process(sink::PublisherSink, t, state)
-#    wall_Δt = time() - sink.last_update_wall_time
-#    if wall_Δt > sink.min_wall_Δt
-#        put!(sink.channel, VehicleState(state, true))
-#        sink.last_update_wall_time = time()
-#    end
-#    nothing
-#end
-
 function extract_yaw_from_quaternion(q)
     atan(2(q[1]*q[4]+q[2]*q[3]), 1-2*(q[3]^2+q[4]^2))
 end
-
