@@ -33,3 +33,7 @@ julia> keyboard_client(ip"1.2.3.4")
 ```julia
 julia> shutdown!(s)
 ```
+
+# Writing an autonomous vehicle client
+
+The file example_project.jl outlines a recommended architecture for ingesting sensor messages and creating vehicle commands.
