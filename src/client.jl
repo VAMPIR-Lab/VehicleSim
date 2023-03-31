@@ -18,10 +18,25 @@ function keyboard_client(host::IPAddr=IPv4(0), port=4444; v_step = 1.0, s_step =
     msg = deserialize(socket) # Visualization info
     @info msg
 
-    local state_msg
     @async while isopen(socket)
         state_msg = deserialize(socket)
-        @info "state msg received"
+        measurements = state_msg.measurements
+        num_cam = 0
+        num_imu = 0
+        num_gps = 0
+        num_gt = 0
+        for meas in measurements
+            if meas isa GroundTruthMeasurement
+                num_gt += 1
+            elseif meas isa CameraMeasurement
+                num_cam += 1
+            elseif meas isa IMUMeasurement
+                num_imu += 1
+            elseif meas isa GPSMeasurement
+                num_gps += 1
+            end
+        end
+        @info "Measurements received: $num_gt gt; $num_cam cam; $num_imu imu; $num_gps gps"
     end
     
     target_velocity = 0.0
@@ -35,6 +50,7 @@ function keyboard_client(host::IPAddr=IPv4(0), port=4444; v_step = 1.0, s_step =
             controlled = false
             target_velocity = 0.0
             steering_angle = 0.0
+            @info "Terminating Keyboard Client."
         elseif key == 'i'
             # increase target velocity
             target_velocity += v_step

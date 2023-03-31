@@ -138,6 +138,7 @@ function gps(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([1.0
     T = get_gps_transform()
     gps_loc_body = T*[zeros(3); 1.0]
     while true
+        sleep(0.0001)
         state = fetch(state_channel)
         tnow = time()
         if tnow - t > min_Δ
@@ -157,11 +158,12 @@ function imu(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([0.0
     min_Δ = 1.0/max_rate
     t = time()
     T_body_imu = get_imu_transform()
-    T_imu_body = invert_transform(T_imu_body)
+    T_imu_body = invert_transform(T_body_imu)
     R = T_imu_body[1:3,1:3]
     p = T_imu_body[1:3,end]
 
     while true
+        sleep(0.0001)
         state = fetch(state_channel)
         tnow = time()
         if tnow - t > min_Δ
@@ -172,7 +174,7 @@ function imu(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([0.0
             ω_imu = R * ω_body
             v_imu = R * v_body + p × ω_imu
 
-            meas = [v_imu; ω_imu] * sqrt_meas_cov*randn(6)
+            meas = [v_imu; ω_imu] + sqrt_meas_cov*randn(6)
 
             imu_meas = IMUMeasurement(t, meas[1:3], meas[4:6])
             put!(meas_channel, imu_meas)
@@ -180,7 +182,9 @@ function imu(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([0.0
     end
 end
 
-function get_3d_bbox_corners(xyz, quat, box_size)
+function get_3d_bbox_corners(state, box_size)
+    quat = state.q[1:4]
+    xyz = state.q[5:7]
     T = get_body_transform(quat, xyz)
     corners = []
     for dx in [-box_size[1]/2, box_size[1]/2]
@@ -199,7 +203,7 @@ function convert_to_pixel(num_pixels, pixel_len, px)
     return pix_id
 end
 
-function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_len = 0.01, pixel_len = 0.001, image_width = 640, image_height = 480) 
+function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_len = 0.01, pixel_len = 0.001, image_width = 640, image_height = 480)
     min_Δ = 1.0/max_rate
     t = time()
     num_vehicles = length(vehicles)
@@ -213,7 +217,8 @@ function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_le
     T_body_camrot2 = multiply_transforms(T_body_cam2, T_cam_camrot)
 
     while true
-        states = [fetch(state_channel) for state_channel in state_channels]
+        sleep(0.0001)
+        states = [fetch(state_channels[id]) for id in 1:num_vehicles]
         corners_body = [get_3d_bbox_corners(state, vehicle_size) for state in states]
         tnow = time()
         if tnow - t > min_Δ
@@ -241,7 +246,7 @@ function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_le
                         for corner in other_vehicle_corners
                             if corner[3] < focal_len
                                 break
-                            else
+                            end
                             px = focal_len*corner[1]/corner[3]
                             py = focal_len*corner[2]/corner[3]
                             left = min(left, px)
@@ -249,10 +254,10 @@ function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_le
                             top = min(top, py)
                             bot = max(bot, py)
                         end
-                        if top ≈ bot || left ≈ right
+                        if top ≈ bot || left ≈ right || top > bot || left > right
                             # out of frame
                             continue
-                        else
+                        else 
                             top = convert_to_pixel(image_height, pixel_len, top)
                             bot = convert_to_pixel(image_height, pixel_len, bot)
                             left = convert_to_pixel(image_width, pixel_len, left)
@@ -274,7 +279,8 @@ function ground_truth(vehicles, state_channels, gt_channels; max_rate=20.0)
     num_vehicles = length(vehicles)
     vehicle_size = SVector(13.2, 5.7, 5.3)
     while true
-        states = [fetch(state_channel) for state_channel in state_channels]
+        sleep(0.0001)
+        states = [fetch(state_channels[i]) for i = 1:num_vehicles]
         tnow = time()
         if tnow - t > min_Δ
             t = tnow
@@ -296,31 +302,37 @@ function measure_vehicles(map,
         state_channels, 
         meas_channels, 
         shutdown_channel;
-        measure_gps = false,
-        measure_imu = false,
-        measure_cam = false,
-        measure_gt = true
-        rng=MersenneTwister(1),
+        measure_gps = true,
+        measure_imu = true,
+        measure_cam = true,
+        measure_gt = true,
+        rng=MersenneTwister(1)
     )
     
     target_segments = identify_loading_segments(map)
 
-    shutdown = false
-    @async while true
-        if isready(shutdown_channel)
-            shutdown = fetch(shutdown_channel)
-            shutdown && break
-        end
-        sleep(0.1)
-    end
  
     num_vehicles = length(state_channels)
     @assert num_vehicles == length(meas_channels)
 
     gps_channels = [Channel{GPSMeasurement}(32) for _ in 1:num_vehicles]
-    imu_channels = [Channel{GPSMeasurement}(32) for _ in 1:num_vehicles]
+    imu_channels = [Channel{IMUMeasurement}(32) for _ in 1:num_vehicles]
     cam_channels = [Channel{CameraMeasurement}(32) for _ in 1:num_vehicles]
-    gt_channels = [Channel{CameraMeasurement}(32) for _ in 1:num_vehicles]
+    gt_channels = [Channel{GroundTruthMeasurement}(32) for _ in 1:num_vehicles]
+    
+    shutdown = false
+    @async while true
+        if isready(shutdown_channel)
+            shutdown = fetch(shutdown_channel)
+            if shutdown
+                foreach(c->close(c), [gps_channels; imu_channels; cam_channels; gt_channels])
+                foreach(c->close(c), values(meas_channels))
+                foreach(c->close(c), values(state_channels))
+                break
+            end
+        end
+        sleep(0.1)
+    end
     
     target_channels = [Channel{Int}(1) for _ in 1:num_vehicles]
     # Fixed target segments for now.
@@ -346,13 +358,14 @@ function measure_vehicles(map,
                 meas_lists = (gps_measurements, imu_measurements, cam_measurements, gt_measurements)
                 channels = (gps_channels[id], imu_channels[id], cam_channels[id], gt_channels[id])
                 while true
+                    sleep(0.0001)
                     for (channel, meas_list) in zip(channels, meas_lists)
                         while isready(channel)
                             msg = take!(channel)
                             push!(meas_list, msg)
                         end
                     end
-                    if isempty(meas_channels[id])
+                    if isempty(meas_channels[id]) && !all(isempty.(meas_lists))
                         target = fetch(target_channels[id])
                         msg = MeasurementMessage(id, target, vcat(meas_lists...))
                         put!(meas_channels[id], msg)

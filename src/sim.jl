@@ -24,35 +24,6 @@ function vehicle_simulate(state::MechanismState{X}, mviss, vehicle_id, final_tim
     RigidBodyDynamics.integrate(integrator, final_time, Δt; max_realtime_rate)
 end
 
-function vis_updater(mvisualizers, channels;
-                     follow_dist=35.0, 
-                     follow_height=6.0,
-                     follow_offset=6.0)
-    while true
-        for (id, channel) in channels
-            if isready(channel)
-                vehicle_state = take!(channel)
-                if vehicle_state.persist
-                    for (e, mvis) in enumerate(mvisualizers)
-                        set_configuration!(mvis, configuration(state))
-                        if e == id
-                            config = configuration(state)
-                            quat = config[1:4]
-                            pose = config[5:7]
-                            yaw = extract_yaw_from_quaternion(quat) 
-                            offset = [sink.follow_dist * [cos(yaw), sin(yaw)]; -sink.follow_height] + sink.follow_offset * [sin(yaw), -cos(yaw), 0]
-                            setcameratarget!(sink.vis[sink.follow_cam_id].visualizer, pose)
-                            setcameraposition!(sink.vis[sink.follow_cam_id].visualizer, pose-offset)
-                        end
-                    end
-                else
-                    foreach(mvis->delete_car(mvis), mvisualizers)
-                end
-            end
-        end
-    end
-end
-
 function load_mechanism()
     urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
     chevy_base = parse_urdf(urdf_path, floating=true)
@@ -60,7 +31,14 @@ function load_mechanism()
     (; urdf_path, chevy_base, chevy_joints)
 end
 
-function server(max_vehicles=1, port=4444; full_state=true, rng=MersenneTwister(1))
+function server(max_vehicles=1, 
+        port=4444; 
+        full_state=true, 
+        rng=MersenneTwister(1), 
+        measure_gps=true, 
+        measure_imu=true, 
+        measure_cam=true, 
+        measure_gt=true)
     host = getipaddr()
     map = training_map()
     server_visualizer = get_vis(map, true, host)
@@ -79,6 +57,7 @@ function server(max_vehicles=1, port=4444; full_state=true, rng=MersenneTwister(
     state_channels = Dict(id=>Channel{MechanismState}(1) for id in 1:max_vehicles)
     cmd_channels = Dict(id=>Channel{VehicleCommand}(1) for id in 1:max_vehicles)
     meas_channels = Dict(id=>Channel{MeasurementMessage}(1) for id in 1:max_vehicles)
+    shutdown_channel = Channel{Bool}(1)
 
     for vehicle_id in 1:max_vehicles
         local seg
@@ -94,14 +73,20 @@ function server(max_vehicles=1, port=4444; full_state=true, rng=MersenneTwister(
         end
         spawn_points[vehicle_id] = seg
         vehicle = spawn_car_on_map(all_visualizers, seg, chevy_base, chevy_visuals, chevy_joints, vehicle_id)
-        @async sim_car(all_visualizers, cmd_channels[vehicle_id], state_channels[vehicle_id], vehicle, vehicle_id)
+        errormonitor(@async sim_car(all_visualizers, cmd_channels[vehicle_id], state_channels[vehicle_id], vehicle, vehicle_id))
         vehicles[vehicle_id] = vehicle
     end
-    @infiltrate
 
-    shutdown_channel = Channel{Bool}(1)
-
-    @async measure_vehicles(map, vehicles, state_channels, meas_channels, shutdown_channel; rng)
+    measure_vehicles(map, 
+                     vehicles, 
+                     state_channels, 
+                     meas_channels, 
+                     shutdown_channel; 
+                     rng, 
+                     measure_gps, 
+                     measure_imu, 
+                     measure_cam, 
+                     measure_gt)
 
     client_connections = [false for _ in 1:max_vehicles]
 
@@ -113,6 +98,7 @@ function server(max_vehicles=1, port=4444; full_state=true, rng=MersenneTwister(
                 if isready(shutdown_channel)
                     shutdown = fetch(shutdown_channel)
                     if shutdown
+                        @info "Shutting down TCP server."
                         close(server)
                         break
                     end
@@ -132,39 +118,23 @@ function server(max_vehicles=1, port=4444; full_state=true, rng=MersenneTwister(
                 end
                 serialize(sock, inform_hostport(client_visualizers[client_count], "Client follow-cam"))
                 let vehicle_id=client_count
-                    @async begin
+                    errormonitor(@async begin
                         while isopen(sock)
                             car_cmd = deserialize(sock)
                             put!(cmd_channels[vehicle_id], car_cmd)
                             if !car_cmd.controlled
                                 close(sock)
-                            end
+                           end
                         end
-                    end
-                    @async begin
+                    end)
+                    errormointor(@async begin
                         while isopen(sock)
                             msg = take!(meas_channels[vehicle_id])
                             serialize(sock, msg)
                         end
-                    end  
+                    end)
                 end
-                #@info "Client accepted."
-                #let client_count=client_count
-                #    errormonitor(@async begin
-                #        active_simulations[client_count] = true
-                #        sim_car(all_visualizers, 
-                #                sock, 
-                #                sim_channels[client_count], 
-                #                vehicles[client_count], 
-                #                client_count, 
-                #                server)
-                #        active_simulations[client_count] = false
-                #        reset_vehicle!(vehicles[client_count], spawn_points[client_count])
-                #    end)
-                #end
             catch e
-                @info "Shutting down server."
-                close(server)
                 break
             end
         end
@@ -218,7 +188,7 @@ function sim_car(visualizers, cmd_channel, state_channel, vehicle, vehicle_id)
     end
 
     control! = (torques, t, state) -> begin
-            !persist && throw(EndOfVehicleException())
+            #!t && throw(EndOfVehicleException())
             torques .= 0.0
             steering_control!(torques, t, state; reference_angle=δ)
             suspension_control!(torques, t, state)
