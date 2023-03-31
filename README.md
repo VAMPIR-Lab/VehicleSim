@@ -4,11 +4,11 @@ VehicleSim
 # Loading / instantiating code
 
 ```julia
-pkg |> instantiate
-pkg |> add https://github.com/forrestlaine/MeshCat.jl
-pkg |> add https://github.com/forrestlaine/RigidBodyDynamics.jl
+(VehicleSim) pkg> instantiate
+(VehicleSim) pkg> add https://github.com/forrestlaine/MeshCat.jl
+(VehicleSim) pkg> add https://github.com/forrestlaine/RigidBodyDynamics.jl
 
-julia |> using VehicleSim
+julia> using VehicleSim
 ```
 
 # Running Simulation
