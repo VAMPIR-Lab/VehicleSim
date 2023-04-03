@@ -16,7 +16,7 @@ julia> using VehicleSim
 It is recommended to start julia with multiple threads, since many concurrent tasks will be executing. The below command starts julia with 8 threads, for example. 
 
 ```
-julia --threads 8
+julia --project --threads 8
 ```
 
 ```julia
