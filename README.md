@@ -12,6 +12,13 @@ julia> using VehicleSim
 ```
 
 # Running Simulation
+
+It is recommended to start julia with multiple threads, since many concurrent tasks will be executing. The below command starts julia with 8 threads, for example. 
+
+```
+julia --threads 8
+```
+
 ```julia
 julia> s = server();
 [ Info: Server can be connected to at 1.2.3.4 and port 4444
@@ -23,7 +30,8 @@ This will spin up the server / simulation engine. For now, the server will insta
 # Connecting a keyboard client
 
 ```julia
-julia> keyboard_client(ip"1.2.3.4")
+julia> using Sockets # to allow ip strings
+julia> keyboard_client(ip"1.2.3.4") # ip address specified by @info statement when starting server
 [ Info: Client accepted.
 [ Info: Client follow-cam can be connected to at 1.2.3.4:8713
 [ Info: Press 'q' at any time to terminate vehicle.
