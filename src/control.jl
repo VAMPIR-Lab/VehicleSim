@@ -1,8 +1,6 @@
 function wheel_control!(bodyid_to_wrench, chevy, t, state::MechanismState;
         reference_velocity=0.0, k₁=-1000.0)
-    yaw = extract_yaw_from_quaternion(state.q[1:4])
-    forward = [cos(yaw), sin(yaw), 0]
-    forward_velocity = state.v[4:6]'*forward
+    forward_velocity = state.v[4]
     drive_force = k₁ * (forward_velocity - reference_velocity)
 
     for i = 7:8
