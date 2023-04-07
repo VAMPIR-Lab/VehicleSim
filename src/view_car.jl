@@ -15,6 +15,10 @@ function inform_hostport(vis, name=nothing)
     "$name can be connected to at $(vis.core.host):$(vis.core.port)"
 end
 
+function extract_yaw_from_quaternion(q)
+    atan(2(q[1]*q[4]+q[2]*q[3]), 1-2*(q[3]^2+q[4]^2))
+end
+
 
 function remove_grid!(vis)
     delete!(vis["/Grid"])
@@ -103,6 +107,35 @@ function configure_contact_points!(chevy)
     end
 end
 
+function visualize_vehicles(vehicles, state_channels, shutdown_channel;
+                            follow_dist=35.0,
+                            follow_height=6.0,
+                            follow_offset=6.0)
+    while true
+        sleep(0.001)
+        if isready(shutdown_channel)
+            fetch(shutdown_channel) && break
+        end
+        for i in keys(vehicles)
+            mviss = vehicles[i].mviss
+            if isready(state_channels[i])
+                state = fetch(state_channels[i])
+                config = configuration(state)
+                foreach(mvis->set_configuration!(mvis, config), mviss)
+                quat = config[1:4]
+                pose = config[5:7]
+                yaw = extract_yaw_from_quaternion(quat) 
+
+                offset = [follow_dist * [cos(yaw), sin(yaw)]; -follow_height] +
+                         follow_offset * [sin(yaw), -cos(yaw), 0]
+
+                setcameratarget!(mviss[i].visualizer, pose)
+                setcameraposition!(mviss[i].visualizer, pose-offset)
+            end
+        end
+    end
+end
+
 function view_car(vis; max_realtime_rate=1.0)
     delete!(vis)
     urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
@@ -124,7 +157,6 @@ function view_car(vis; max_realtime_rate=1.0)
     chevy_visuals = URDFVisuals(urdf_path, package_path=[dirname(pathof(VehicleSim))])
     
     mvis = MechanismVisualizer(chevy, chevy_visuals, vis)
-    @infiltrate
 
     all_joints = joints(chevy)
     config = CarConfig(SVector(0.0,0,4.0), 0.0, 0.0, 0.0, 0.0)

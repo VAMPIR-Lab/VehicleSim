@@ -2,7 +2,7 @@
 struct EndOfSimException <: Exception end
 struct EndOfVehicleException <: Exception end
 
-function vehicle_simulate(state::MechanismState{X}, mviss, vehicle_id, final_time, internal_control!, external_control!, publisher!; Δt=1e-4, stabilization_gains=RigidBodyDynamics.default_constraint_stabilization_gains(X), max_realtime_rate=Inf) where X
+function vehicle_simulate(state::MechanismState{X}, mviss, vehicle_id, final_time, internal_control!, external_control!, publisher!; Δt=1e-3, stabilization_gains=RigidBodyDynamics.default_constraint_stabilization_gains(X), max_realtime_rate=Inf) where X
     T = RigidBodyDynamics.cache_eltype(state)
     result = DynamicsResult{T}(state.mechanism)
     control_torques = similar(velocity(state))
@@ -73,9 +73,11 @@ function server(max_vehicles=1,
         end
         spawn_points[vehicle_id] = seg
         vehicle = spawn_car_on_map(all_visualizers, seg, chevy_base, chevy_visuals, chevy_joints, vehicle_id)
-        errormonitor(@async sim_car(all_visualizers, cmd_channels[vehicle_id], state_channels[vehicle_id], vehicle, vehicle_id))
+        @async sim_car(cmd_channels[vehicle_id], state_channels[vehicle_id], shutdown_channel, vehicle, vehicle_id)
         vehicles[vehicle_id] = vehicle
     end
+
+    @async visualize_vehicles(vehicles, state_channels, shutdown_channel)
 
     measure_vehicles(map, 
                      vehicles, 
@@ -120,6 +122,7 @@ function server(max_vehicles=1,
                 let vehicle_id=client_count
                     errormonitor(@async begin
                         while isopen(sock)
+                            sleep(0.001)
                             car_cmd = deserialize(sock)
                             put!(cmd_channels[vehicle_id], car_cmd)
                             if !car_cmd.controlled
@@ -129,8 +132,11 @@ function server(max_vehicles=1,
                     end)
                     errormointor(@async begin
                         while isopen(sock)
-                            msg = take!(meas_channels[vehicle_id])
-                            serialize(sock, msg)
+                            sleep(0.001)
+                            if isready(meas_channels[vehicle_id])       
+                                msg = take!(meas_channels[vehicle_id])
+                                serialize(sock, msg)
+                            end
                         end
                     end)
                 end
@@ -171,7 +177,7 @@ function spawn_car_on_map(visualizers, seg, chevy_base, chevy_visuals, chevy_joi
     vehicle
 end
 
-function sim_car(visualizers, cmd_channel, state_channel, vehicle, vehicle_id)
+function sim_car(cmd_channel, state_channel, shutdown_channel, vehicle, vehicle_id)
 
     chevy = vehicle.chevy
     state = vehicle.state
@@ -188,16 +194,20 @@ function sim_car(visualizers, cmd_channel, state_channel, vehicle, vehicle_id)
     end
 
     control! = (torques, t, state) -> begin
-            #!t && throw(EndOfVehicleException())
             torques .= 0.0
             steering_control!(torques, t, state; reference_angle=δ)
             suspension_control!(torques, t, state)
     end
+
     wrenches! = (bodyid_to_wrench, t, state) -> begin
         RigidBodyDynamics.update_transforms!(state)
         wheel_control!(bodyid_to_wrench, chevy, t, state; reference_velocity=v)
     end
+
     publisher! = (t, state) -> begin
+        if isready(shutdown_channel)
+            fetch(shutdown_channel) && throw(error("Shutdown!"))
+        end
         if isready(state_channel)
             stale = take!(state_channel)
         end
@@ -205,8 +215,11 @@ function sim_car(visualizers, cmd_channel, state_channel, vehicle, vehicle_id)
     end
 
     @async while true
-        car_cmd = take!(cmd_channel)
-        set_reference!(car_cmd)
+        sleep(0.001)
+        if isready(cmd_channel)
+            car_cmd = take!(cmd_channel)
+            set_reference!(car_cmd)
+        end
     end
 
     try 
