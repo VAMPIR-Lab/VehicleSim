@@ -33,19 +33,45 @@ function localize(gps_channel, imu_channel, localization_state_channel)
 end
 
 function perception(cam_meas_channel, localization_state_channel, perception_state_channel)
-    # set up stuff
+     # set up stuff
+
+    # struct CameraMeasurement <: Measurement
+    #     time::Float64
+    #     camera_id::Int
+    #     focal_length::Float64
+    #     pixel_length::Float64
+    #     image_width::Int # pixels
+    #     image_height::Int # pixels
+    #     bounding_boxes::Vector{SVector{4, Int}}
+    # end
+
     while true
+
+        """
+            1. Get Camera measurements and ego car's localization
+        """
         fresh_cam_meas = []
         while isready(cam_meas_channel)
             meas = take!(cam_meas_channel)
             push!(fresh_cam_meas, meas)
         end
-
         latest_localization_state = fetch(localization_state_channel)
-        
+
+        """
+            2. Determine where the camera is looking at
+        """
         # process bounding boxes / run ekf / do what you think is good
 
-        perception_state = MyPerceptionType(0,0.0)
+
+        """
+            3. Run ekf
+        """
+
+
+        """
+            4. Output the new perception state
+        """
+        perception_state = MyPerceptionType(0, 0.0)
         if isready(perception_state_channel)
             take!(perception_state_channel)
         end
