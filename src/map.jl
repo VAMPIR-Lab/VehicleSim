@@ -537,7 +537,7 @@ function add_double_segments!(all_segs, base, direction; taper=1, length=5.0, sp
         seg_2 = RoadSegment(seg_id+=1, [b1, b2, b3], inbound_types, speed_limit, [])
     else
         b2 = LaneBoundary(pt_d, pt_a, 0.0, true, true)
-        seg_2 = RoadSegment(seg_id+=1, [b1, b2, b3], [standard,], speed_limit, [])
+        seg_2 = RoadSegment(seg_id+=1, [b1, b2], [standard,], speed_limit, [])
     end
     
     if !isnothing(base)
