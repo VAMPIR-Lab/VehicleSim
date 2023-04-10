@@ -21,19 +21,19 @@ function localize(gps_channel, imu_channel, localization_state_channel)
             meas = take!(imu_channel)
             push!(fresh_imu_meas, meas)
         end
-        
+
         # process measurements
 
-        localization_state = MyLocalizationType(0,0.0)
+        localization_state = MyLocalizationType(0, 0.0)
         if isready(localization_state_channel)
             take!(localization_state_channel)
         end
         put!(localization_state_channel, localization_state)
-    end 
+    end
 end
 
 function perception(cam_meas_channel, localization_state_channel, perception_state_channel)
-     # set up stuff
+    # set up stuff
 
     # struct CameraMeasurement <: Measurement
     #     time::Float64
@@ -79,11 +79,11 @@ function perception(cam_meas_channel, localization_state_channel, perception_sta
     end
 end
 
-function decision_making(localization_state_channel, 
-        perception_state_channel, 
-        map, 
-        target_road_segment_id, 
-        socket)
+function decision_making(localization_state_channel,
+    perception_state_channel,
+    map,
+    target_road_segment_id,
+    socket)
     # do some setup
     while true
         latest_localization_state = fetch(localization_state_channel)
