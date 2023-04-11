@@ -4,9 +4,87 @@ struct MyLocalizationType
 end
 
 struct MyPerceptionType
-    field1::Int1
-    field2::Float64
+    time::Float64
+    vehicle_id::Int
+    position::SVector{3,Float64} # position of center of vehicle
+    orientation::SVector{4,Float64} # represented as quaternion
+    velocity::SVector{3,Float64}
+    # angular_velocity::SVector{3, Float64} # angular velocity around x,y,z axes
+    size::SVector{3,Float64} # length, width, height of 3d bounding box centered at (position/orientation)
 end
+
+
+function test_algorithms(gt_channel,
+    localization_state_channel,
+    perception_state_channel,
+    ego_vehicle_id)
+    estimated_vehicle_states = Dict{Int,Tuple{Float64,Union{SimpleVehicleState,FullVehicleState}}}
+    gt_vehicle_states = Dict{Int,GroundTruthMeasuremen}
+
+    t = time()
+    while true
+
+        while isready(gt_channel)
+            meas = take!(gt_channel)
+            id = meas.vehicle_id
+            if meas.time > gt_vehicle_states[id].time
+                gt_vehicle_states[id] = meas
+            end
+        end
+
+        # Test Localization
+        latest_estimated_ego_state = fetch(localization_state_channel)
+        latest_true_ego_state = gt_vehicle_states[ego_vehicle_id]
+        if latest_estimated_ego_state.last_update < latest_true_ego_state.time - 0.5
+            @warn "Localization algorithm stale."
+        else
+            estimated_xyz = latest_estimated_ego_state.position
+            true_xyz = latest_true_ego_state.position
+            position_error = norm(estimated_xyz - true_xyz)
+            t2 = time()
+            if t2 - t > 5.0
+                @info "Localization position error: $position_error"
+                t = t2
+            end
+        end
+
+        # Test Perception
+        latest_perception_state = fetch(perception_state_channel)
+        last_perception_update = latest_perception_state.last_update
+        vehicles = last_perception_state.x
+
+        for vehicle in vehicles
+            xy_position = [vehicle.p1, vehicle.p2]
+            closest_id = 0
+            closest_dist = Inf
+            for (id, gt_vehicle) in gt_vehicle_states
+                if id == ego_vehicle_id
+                    continue
+                else
+                    gt_xy_position = gt_vehicle_position[1:2]
+                    dist = norm(gt_xy_position - xy_position)
+                    if dist < closest_dist
+                        closest_id = id
+                        closest_dist = dist
+                    end
+                end
+            end
+            paired_gt_vehicle = gt_vehicle_states[closest_id]
+
+            # compare estimated to GT
+
+            if last_perception_update < paired_gt_vehicle.time - 0.5
+                @info "Perception upate stale"
+            else
+                # compare estimated to true size
+                estimated_size = [vehicle.l, vehicle.w, vehicle.h]
+                actual_size = paired_gt_vehicle.size
+                @info "Estimated size error: $(norm(actual_size-estimated_size))"
+            end
+        end
+    end
+end
+
 
 function localize(gps_channel, imu_channel, localization_state_channel)
     # Set up algorithm / initialize variables
@@ -66,7 +144,7 @@ function perception(cam_meas_channel, localization_state_channel, perception_sta
         """
             3. Run ekf
         """
-
+        # NOTE: ONE EKF PER VEHICLE SEEN
 
         """
             4. Output the new perception state
@@ -137,4 +215,5 @@ function my_client(host::IPAddr=IPv4(0), port=4444)
     @async localize(gps_channel, imu_channel, localization_state_channel)
     @async perception(cam_channel, localization_state_channel, perception_state_channel)
     @async decision_making(localization_state_channel, perception_state_channel, map, socket)
+    @async test_algorithms(gt_channel, localization_state_channel, perception_state_channel, ego_vehicle_id)
 end
