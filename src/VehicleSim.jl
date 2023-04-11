@@ -25,6 +25,7 @@ include("control.jl")
 include("sink.jl")
 include("measurements.jl")
 include("map.jl")
+include("perception.jl")
 
 export server, shutdown!, keyboard_client
 
