@@ -1,7 +1,6 @@
 # The entire perception.jl file is working on ONE bounding box (i.e. only four corners of z is given).
-# So, if there are two bounding boxes coming in per vehicle, we need to call these functions twcie in
+# So, if there are two bounding boxes coming in per vehicle, the ekf function must be called twcie in
 # example_project.jl's perception() function.
-
 
 function perception_f(x, delta_t)
     # update xk = [p1 p2 theta vel l w h]
@@ -28,8 +27,9 @@ function perception_jac_fx(x, delta_t)
 end
 
 function perception_get_3d_bbox_corners(x, box_size)
+    # referenced L20 pg.4 as well
     quat = [0 0 x[3] 0]
-    xyz = [x[1] x[2] 0]
+    xyz = [x[1] x[2] box_size[3]]
     T = get_body_transform(quat, xyz)
     corners = []
     for dx in [-box_size[1] / 2, box_size[1] / 2]
@@ -44,6 +44,9 @@ end
 
 
 """
+    Usage:
+        - should be called per camera
+
     Parameters:
         - x_other: state of a recognized car (in [p1 p2 theta vel l w h])
         - x_ego: state of ego car (in a format that localization gives)
@@ -119,7 +122,12 @@ function perception_h(x_other, x_ego, cam_id)
     return bbox
 end
 
-function perception_jac_hx(x_other, x_ego, cam_id)
+function perception_jac_hx(zk, x_other, x_ego, cam_id)
+    top = zk[1]
+    left = zk[2]
+    bot = zk[3]
+    right = zk[4]
+
     # Calculate J1
 
 
@@ -152,6 +160,8 @@ end
 
 
 """
+    Usage:
+        - should be called per camera -- per vehicle is addressed in example_project.jl file
     Variables:
         - x = state of the other car = [p1 p2 theta vel l w h] (7 x 1)
         - P = covariance of the state
@@ -159,16 +169,16 @@ end
         - Q = process noise
         - R = measurement noise
 """
-function perception_ekf(z, xego, delta_t, cam_id)
+function perception_ekf(xego, delta_t, cam_id)
     # constant noise variables
     covariance_p = Diagonal([1^2, 1^2, 0.2^2, 0.4^2, 0.005^2, 0.003^2, 0.001^2])  # covariance for process model
     covariance_z = Diagonal([1^2, 1^2, 1^2, 1^2]) # covariance for measurement model
-    # num_boxes = length(z) / 4
     num_steps = 25
 
     # initial states -- *change based on your state attributes
     x0 = [xego[1] + 2, xego[2] + 2, 0, xego[4], 8, 5, 5] # [p1 p2 theta vel l w h]
-    mu = zeros(7) # mean value of xk state of the other car
+    # mean value of xk state of the OTHER car
+    mu = zeros(7)
     sigma = Diagonal([1^2, 1^2, 0.2^2, 0.4^2, 0.005^2, 0.003^2, 0.001^2])
 
     # variables to keep updating
@@ -195,14 +205,14 @@ function perception_ekf(z, xego, delta_t, cam_id)
         mu_carrot = perception_f(mus[k], delta_t)
 
         # Measurement model
-        top_and_left = [zk[1], zk[2]] # mins
-        bot_andright = [zk[3], zk[4]] # maxs
+        # top_left = [zk[1], zk[2]] # mins
+        # bot_right = [zk[3], zk[4]] # maxs
 
-        C = perception_jac_hx(mu_carrot, xego)
+        C = perception_jac_hx(zk, mu_carrot, xego, cam_id)
         # NOTE: depending on the length of covariance_z, the size of C and others may have to be diff
         # - OR maybe just run it twice with cov_z being 4 elements long no matter what
         sigma_k = inv(inv(sig_carrot) + C' * inv(covariance_z) * C)
-        mu_k = sigma_k * (inv(sigma_carrot) * mu_carrot + C' * inv(covariance_z) * zs[k])
+        mu_k = sigma_k * (inv(sigma_carrot) * mu_carrot + C' * inv(covariance_z) * zk)
 
         # update the variables
         push!(mus, mu_k)
