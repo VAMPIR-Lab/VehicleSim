@@ -3,16 +3,16 @@ VehicleSim
 
 # Loading / instantiating code
 
+It is recommended to start julia with multiple threads, since many concurrent tasks will be executing. 
+
+```
+julia --project --threads=auto
+```
+
 ```julia
 (VehicleSim) pkg> instantiate
 (VehicleSim) pkg> add https://github.com/forrestlaine/MeshCat.jl
 (VehicleSim) pkg> add https://github.com/forrestlaine/RigidBodyDynamics.jl
-```
-
-It is recommended to start julia with multiple threads, since many concurrent tasks will be executing. The below command starts julia with 8 threads, for example. 
-
-```
-julia --project --threads 8
 ```
 
 ```julia

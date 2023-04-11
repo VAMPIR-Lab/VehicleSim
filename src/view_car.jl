@@ -93,7 +93,7 @@ function configure_contact_points!(chevy)
 
     # define contact point on wheel origins (will need to change
     # this for sloped surfaces   
-    friction_model = RigidBodyDynamics.ViscoelasticCoulombModel{Float64}(1000.0,1000.0,1000.0)
+    friction_model = RigidBodyDynamics.ViscoelasticCoulombModel{Float64}(1000.0,0.0,1000.0)
     normal_contact_model = RigidBodyDynamics.hunt_crossley_hertz() # investigate parameters if penetrating
     soft_contact_model = RigidBodyDynamics.SoftContactModel(normal_contact_model, friction_model)
 
