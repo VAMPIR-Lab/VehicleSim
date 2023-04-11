@@ -1,7 +1,8 @@
 struct MyLocalizationType
-    field1::SVector{2,Float64} # Lat and Long
-    field2::SVector{2,Float64} # Linear and angular velocity
-    field3::Float64 #time stamp
+    latlong::SVector{2,Float64} # Lat and Long
+    linear_velocity::SVector{3,Float64}
+    angular_velocity::SVector{3,Float64}
+    time::Float64 #time stamp
 end
 
 struct MyPerceptionType
@@ -103,12 +104,12 @@ function localize(gps_channel, imu_channel, localization_state_channel, gt_chann
 
         # process measurements
 
-        localization_state = MyLocalizationType([0,0], [0,0], 0)
-        # if isready(gt_channel)
-            # @info "test"
-            # @info take!(gt_channel)
-        # end
+        # Using GT until we get a real algorithm
+        gt = fetch(gt_channel)
+        latlong = gt.position[1:2]
 
+        localization_state = MyLocalizationType(latlong, gt.velocity, gt.angular_velocity, gt.time)
+        # @info localization_state
         if isready(localization_state_channel)
             take!(localization_state_channel)
         end
@@ -220,7 +221,8 @@ function my_client(host::IPAddr=IPv4(0), port=4444)
         end
     end
 
-    @async localize(gps_channel, imu_channel, localization_state_channel, gt_channel) #FIXME: Remove gt channel once ready
+    # @async 
+    localize(gps_channel, imu_channel, localization_state_channel, gt_channel) #FIXME: Remove gt channel once ready
     # @async perception(cam_channel, localization_state_channel, perception_state_channel)
     # @async decision_making(localization_state_channel, perception_state_channel, map, socket)
     # @async test_algorithms(gt_channel, localization_state_channel, perception_state_channel, ego_vehicle_id)

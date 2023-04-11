@@ -14,10 +14,10 @@ function localize(gps_channel, imu_channel, localization_state_channel)
         
         # process measurements
 
-        localization_state = MyLocalizationType(0,0.0)
-        if isready(localization_state_channel)
-            take!(localization_state_channel)
-        end
-        put!(localization_state_channel, localization_state)
+        # localization_state = MyLocalizationType(0,0.0)
+        # if isready(localization_state_channel)
+        #     take!(localization_state_channel)
+        # end
+        # put!(localization_state_channel, localization_state)
     end 
 end
