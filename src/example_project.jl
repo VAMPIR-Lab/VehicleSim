@@ -1,6 +1,7 @@
 struct MyLocalizationType
-    field1::Int
-    field2::Float64
+    field1::SVector{2,Float64} # Lat and Long
+    field2::SVector{2,Float64} # Linear and angular velocity
+    field3::Float64 #time stamp
 end
 
 struct MyPerceptionType
@@ -86,9 +87,9 @@ function test_algorithms(gt_channel,
 end
 
 
-function localize(gps_channel, imu_channel, localization_state_channel)
+function localize(gps_channel, imu_channel, localization_state_channel, gt_channel)
     # Set up algorithm / initialize variables
-    while true
+    for n in 1:100
         fresh_gps_meas = []
         while isready(gps_channel)
             meas = take!(gps_channel)
@@ -102,7 +103,12 @@ function localize(gps_channel, imu_channel, localization_state_channel)
 
         # process measurements
 
-        localization_state = MyLocalizationType(0, 0.0)
+        localization_state = MyLocalizationType([0,0], [0,0], 0)
+        # if isready(gt_channel)
+            # @info "test"
+            # @info take!(gt_channel)
+        # end
+
         if isready(localization_state_channel)
             take!(localization_state_channel)
         end
@@ -175,7 +181,7 @@ function decision_making(localization_state_channel,
     end
 end
 
-function isfull(ch:Channel)
+function isfull(ch::Channel)
     length(ch.data) ≥ ch.sz_max
 end
 
@@ -183,6 +189,8 @@ end
 function my_client(host::IPAddr=IPv4(0), port=4444)
     socket = Sockets.connect(host, port)
     map_segments = training_map()
+    msg = deserialize(socket) # Visualization info
+    @info msg
 
     gps_channel = Channel{GPSMeasurement}(32)
     imu_channel = Channel{IMUMeasurement}(32)
@@ -195,10 +203,10 @@ function my_client(host::IPAddr=IPv4(0), port=4444)
     target_map_segment = 0 # (not a valid segment, will be overwritten by message)
     ego_vehicle_id = 0 # (not a valid id, will be overwritten by message. This is used for discerning ground-truth messages)
 
-    @async while true
+    @async for n in 1:100
         measurement_msg = deserialize(socket)
-        target_map_segment = meas.target_segment
-        ego_vehicle_id = meas.vehicle_id
+        target_map_segment = measurement_msg.target_segment
+        ego_vehicle_id = measurement_msg.vehicle_id
         for meas in measurement_msg.measurements
             if meas isa GPSMeasurement
                 !isfull(gps_channel) && put!(gps_channel, meas)
@@ -212,8 +220,8 @@ function my_client(host::IPAddr=IPv4(0), port=4444)
         end
     end
 
-    @async localize(gps_channel, imu_channel, localization_state_channel)
-    @async perception(cam_channel, localization_state_channel, perception_state_channel)
-    @async decision_making(localization_state_channel, perception_state_channel, map, socket)
-    @async test_algorithms(gt_channel, localization_state_channel, perception_state_channel, ego_vehicle_id)
+    @async localize(gps_channel, imu_channel, localization_state_channel, gt_channel) #FIXME: Remove gt channel once ready
+    # @async perception(cam_channel, localization_state_channel, perception_state_channel)
+    # @async decision_making(localization_state_channel, perception_state_channel, map, socket)
+    # @async test_algorithms(gt_channel, localization_state_channel, perception_state_channel, ego_vehicle_id)
 end
