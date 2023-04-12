@@ -110,6 +110,7 @@ function server(max_vehicles=1,
         end
         while true
             try
+                @info "Waiting for client"
                 sock = accept(server)
                 @info "Client accepted."
                 client_count = mod1(client_count+1, max_vehicles)
@@ -130,7 +131,7 @@ function server(max_vehicles=1,
                            end
                         end
                     end)
-                    errormointor(@async begin
+                    errormonitor(@async begin
                         while isopen(sock)
                             sleep(0.001)
                             if isready(meas_channels[vehicle_id])       
