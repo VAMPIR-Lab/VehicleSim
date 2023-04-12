@@ -79,6 +79,9 @@ end
 function my_client(host::IPAddr=IPv4(0), port=4444)
     socket = Sockets.connect(host, port)
     map_segments = training_map()
+    
+    msg = deserialize(socket) # Visualization info
+    @info msg
 
     gps_channel = Channel{GPSMeasurement}(32)
     imu_channel = Channel{IMUMeasurement}(32)
@@ -92,9 +95,19 @@ function my_client(host::IPAddr=IPv4(0), port=4444)
     ego_vehicle_id = 0 # (not a valid id, will be overwritten by message. This is used for discerning ground-truth messages)
 
     @async while true
-        measurement_msg = deserialize(socket)
-        target_map_segment = meas.target_segment
-        ego_vehicle_id = meas.vehicle_id
+        # This while loop reads to the end of the socket stream (makes sure you
+        # are looking at the latest messages)
+        local measurement_msg
+        while true
+            @async eof(socket)
+            if bytesavailable(socket) > 0
+                measurement_msg = deserialize(socket)
+            else
+                break
+            end
+        end
+        target_map_segment = measurement_msg.target_segment
+        ego_vehicle_id = measurement_msg.vehicle_id
         for meas in measurement_msg.measurements
             if meas isa GPSMeasurement
                 !isfull(gps_channel) && put!(gps_channel, meas)
