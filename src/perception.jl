@@ -27,11 +27,13 @@ function perception_jac_fx(x, delta_t)
 end
 
 function perception_get_3d_bbox_corners(x, box_size)
+    theta = x[3]
     # referenced L20 pg.4 as well
-    quat = [0 0 x[3] 0]
+    R = [cos(theta) -sin(theta) 0; sin(theta) cos(theta) 0; 0 0 1]
     xyz = [x[1] x[2] box_size[3]]
-    T = get_body_transform(quat, xyz)
+    T = [R xyz]
     corners = []
+
     for dx in [-box_size[1] / 2, box_size[1] / 2]
         for dy in [-box_size[2] / 2, box_size[2] / 2]
             for dz in [-box_size[3] / 2, box_size[3] / 2]
@@ -40,6 +42,13 @@ function perception_get_3d_bbox_corners(x, box_size)
         end
     end
     corners
+end
+
+
+function convert_to_pixel_unrounded(num_pixels, pixel_len, px)
+    min_val = -pixel_len * num_pixels / 2
+    pix_id = (px - min_val) / pixel_len
+    return pix_id
 end
 
 
@@ -83,6 +92,8 @@ function perception_h(x_other, x_ego, cam_id)
 
     # Section 2: Calculate the bounding boxes
     bbox = []
+    # bbox_unrounded are used to calculate the jacobian of h in float to be more precise
+    bbox_unrounded = []
     # NOTE: deal with having only 1 or 2 boxes here
     # for j = 1:num_vehicles
     # similar to x_carrot = R * [q1 q2 q3] + t, turn points rotated cam frame
@@ -112,14 +123,22 @@ function perception_h(x_other, x_ego, cam_id)
         # out of frame - return empty bbox
         return bbox
     else
+        # update bbox
         top = convert_to_pixel(image_height, pixel_len, top)
         bot = convert_to_pixel(image_height, pixel_len, bot)
         left = convert_to_pixel(image_width, pixel_len, left)
         top = convert_to_pixel(image_width, pixel_len, right)
         push!(bbox, SVector(top, left, bot, right))
+
+        # update bbox_unrounded
+        top_ur = convert_to_pixel_unrounded(image_height, pixel_len, top)
+        bot_ur = convert_to_pixel_unrounded(image_height, pixel_len, bot)
+        left_ur = convert_to_pixel_unrounded(image_height, pixel_len, left)
+        right_ur = convert_to_pixel_unrounded(image_height, pixel_len, right)
+        push!(bbox_unrounded, SVector(top_ur, left_ur, bot_ur, right_ur))
     end
     # end
-    return bbox
+    return bbox, bbox_unrounded
 end
 
 function perception_jac_hx(zk, x_other, x_ego, cam_id)
@@ -131,7 +150,7 @@ function perception_jac_hx(zk, x_other, x_ego, cam_id)
     # Calculate J1
 
 
-    # Calculate J2
+    # Calculate J2 -- confirmed it's correct
     T_body_cam1 = get_cam_transform(1)
     T_body_cam2 = get_cam_transform(2)
     T_cam_camrot = get_rotated_camera_transform()
@@ -152,7 +171,7 @@ function perception_jac_hx(zk, x_other, x_ego, cam_id)
     # Calculate J3
 
 
-    # Calculate J4
+    # Calculate J4 -- confirmed it's correct
     pixel_len = 0.001
     J4 = [pixel_len 0; 0 pixel_len]
 
