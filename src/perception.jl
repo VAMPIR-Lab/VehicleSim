@@ -30,7 +30,7 @@ function perception_get_3d_bbox_corners(x, box_size)
     theta = x[3]
     # referenced L20 pg.4 as well
     R = [cos(theta) -sin(theta) 0; sin(theta) cos(theta) 0; 0 0 1]
-    xyz = [x[1] x[2] box_size[3]]
+    xyz = [x[1] x[2] box_size[3] / 2]
     T = [R xyz]
     corners = []
 
@@ -44,13 +44,11 @@ function perception_get_3d_bbox_corners(x, box_size)
     corners
 end
 
-
 function convert_to_pixel_unrounded(num_pixels, pixel_len, px)
     min_val = -pixel_len * num_pixels / 2
     pix_id = (px - min_val) / pixel_len
     return pix_id
 end
-
 
 """
     Usage:
@@ -94,8 +92,8 @@ function perception_h(x_other, x_ego, cam_id)
     bbox = []
     # bbox_unrounded are used to calculate the jacobian of h in float to be more precise
     bbox_unrounded = []
+    corners = []
     # NOTE: deal with having only 1 or 2 boxes here
-    # for j = 1:num_vehicles
     # similar to x_carrot = R * [q1 q2 q3] + t, turn points rotated cam frame
     corners_of_other_vehicle = [transform * [pt; 1] for pt in corners_body[j]]
 
@@ -123,11 +121,17 @@ function perception_h(x_other, x_ego, cam_id)
         # out of frame - return empty bbox
         return bbox
     else
+        # update corners
+        push!(corners, top)
+        push!(corners, bot)
+        push!(corners, left)
+        push!(corners, right)
+
         # update bbox
         top = convert_to_pixel(image_height, pixel_len, top)
         bot = convert_to_pixel(image_height, pixel_len, bot)
         left = convert_to_pixel(image_width, pixel_len, left)
-        top = convert_to_pixel(image_width, pixel_len, right)
+        right = convert_to_pixel(image_width, pixel_len, right)
         push!(bbox, SVector(top, left, bot, right))
 
         # update bbox_unrounded
@@ -137,8 +141,7 @@ function perception_h(x_other, x_ego, cam_id)
         right_ur = convert_to_pixel_unrounded(image_height, pixel_len, right)
         push!(bbox_unrounded, SVector(top_ur, left_ur, bot_ur, right_ur))
     end
-    # end
-    return bbox, bbox_unrounded
+    return bbox, bbox_unrounded, corners
 end
 
 function perception_jac_hx(zk, x_other, x_ego, cam_id)
@@ -173,8 +176,8 @@ function perception_jac_hx(zk, x_other, x_ego, cam_id)
 
     # Calculate J4 -- confirmed it's correct
     pixel_len = 0.001
-    J4 = [pixel_len 0; 0 pixel_len]
-
+    s = 1 / pixel_len
+    J4 = [s 0; 0 s]
 end
 
 
@@ -208,11 +211,9 @@ function perception_ekf(xego, delta_t, cam_id)
 
     x_prev = x0
     for k = 1:num_steps # for k = 1:something
-        # for i = 1:num_boxes # NOTE: double check if this is correct
         xk = perception_f(x_prev, delta_t)
         x_prev = xk
-        # NOTE: what if we have more than one bounding box?
-        zk = perception_h(xk, xego, cam_id) # measurement of bounding box (can be 4x1 or 8x1 depending on # of cameras recognizing car(s))
+        zk, bbox_unrounded, corners = perception_h(xk, xego, cam_id)
 
         # *All of the equations below are referenced from L17 pg.3 and HW4
         # Process model: P(xk | xk-1, bbxk) = N(A*x-1, sig_carrot))
@@ -224,12 +225,7 @@ function perception_ekf(xego, delta_t, cam_id)
         mu_carrot = perception_f(mus[k], delta_t)
 
         # Measurement model
-        # top_left = [zk[1], zk[2]] # mins
-        # bot_right = [zk[3], zk[4]] # maxs
-
         C = perception_jac_hx(zk, mu_carrot, xego, cam_id)
-        # NOTE: depending on the length of covariance_z, the size of C and others may have to be diff
-        # - OR maybe just run it twice with cov_z being 4 elements long no matter what
         sigma_k = inv(inv(sig_carrot) + C' * inv(covariance_z) * C)
         mu_k = sigma_k * (inv(sigma_carrot) * mu_carrot + C' * inv(covariance_z) * zk)
 
@@ -239,6 +235,5 @@ function perception_ekf(xego, delta_t, cam_id)
         push!(zs, zk)
         # push!(gt_states, xk)
         # push!(timesteps, delta_t)
-        # end
     end
 end
