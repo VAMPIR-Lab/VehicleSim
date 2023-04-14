@@ -50,6 +50,13 @@ function convert_to_pixel_unrounded(num_pixels, pixel_len, px)
     return pix_id
 end
 
+function convert_to_pixel_unrounded(num_pixels, pixel_len, px)
+    min_val = -pixel_len * num_pixels / 2
+    pix_id = (px - min_val) / pixel_len
+    return pix_id
+end
+
+
 """
     Usage:
         - should be called per camera
@@ -144,12 +151,6 @@ function perception_h(x_other, x_ego, cam_id)
         # out of frame - return empty bbox
         return bbox
     else
-        # update corners
-        push!(corners, top)
-        push!(corners, bot)
-        push!(corners, left)
-        push!(corners, right)
-
         # update bbox
         top = convert_to_pixel(image_height, pixel_len, top)
         bot = convert_to_pixel(image_height, pixel_len, bot)
