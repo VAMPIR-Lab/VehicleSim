@@ -25,10 +25,7 @@ include("control.jl")
 include("sink.jl")
 include("measurements.jl")
 include("map.jl")
-<<<<<<< HEAD
 include("perception.jl")
-=======
->>>>>>> 50bb3acbc34fcb344c0a7ad89da2edd29508ee69
 include("example_project.jl")
 
 export server, shutdown!, keyboard_client, my_client
