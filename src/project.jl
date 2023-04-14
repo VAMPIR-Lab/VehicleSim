@@ -25,74 +25,22 @@ struct MyPerceptionType
     x::Vector{SimpleVehicleState}
 end
 
-function test_algorithms(gt_channel,
-        localization_state_channel,
-        perception_state_channel, 
-        ego_vehicle_id)
-    estimated_vehicle_states = Dict{Int, Tuple{Float64, Union{SimpleVehicleState, FullVehicleState}}}
-    gt_vehicle_states = Dict{Int, GroundTruthMeasuremen}
+# camera stream is continuous, but localization is one time
+# so you have to extrapolate the localization state to the 
+# camera time that you want to process for
+# localization is whatever it is
 
-    t = time()
-    while true
+# channels are conveyer belts, coming in sorted
+# but localization channels are just one at a time 
 
-        while isready(gt_channel)
-            meas = take!(gt_channel)
-            id = meas.vehicle_id
-            if meas.time > gt_vehicle_states[id].time
-                gt_vehicle_states[id] = meas
-            end
-        end
+# Take everything off the camera channel, put in a box, 
+# Sort them by time, if there are any measurements from before
+# last measurement, throw that away because we're past that
+# We take all of them in the box, see localization state, extend forward
+# or backward, and then do EKF
+# Might need to adjust EKF to only do it on most recent box
 
-        latest_estimated_ego_state = fetch(localization_state_channel)
-        latest_true_ego_state = gt_vehicle_states[ego_vehicle_id]
-        if latest_estimated_ego_state.last_update < latest_true_ego_state.time - 0.5
-            @warn "Localization algorithm stale."
-        else
-            estimated_xyz = latest_estimated_ego_state.position
-            true_xyz = latest_true_ego_state.position
-            position_error = norm(estimated_xyz - true_xyz)
-            t2 = time()
-            if t2 - t > 5.0
-                @info "Localization position error: $position_error"
-                t = t2
-            end
-        end
-
-        latest_perception_state = fetch(perception_state_channel)
-        last_perception_update = latest_perception_state.last_update
-        vehicles = last_perception_state.x
-
-        for vehicle in vehicles
-            xy_position = [vehicle.p1, vehicle.p2]
-            closest_id = 0
-            closest_dist = Inf
-            for (id, gt_vehicle) in gt_vehicle_states
-                if id == ego_vehicle_id
-                    continue
-                else
-                    gt_xy_position = gt_vehicle_position[1:2]
-                    dist = norm(gt_xy_position-xy_position)
-                    if dist < closest_dist
-                        closest_id = id
-                        closest_dist = dist
-                    end
-                end
-            end
-            paired_gt_vehicle = gt_vehicle_states[closest_id]
-
-            # compare estimated to GT
-
-            if last_perception_update < paired_gt_vehicle.time - 0.5
-                @info "Perception upate stale"
-            else
-                # compare estimated to true size
-                estimated_size = [vehicle.l, vehicle.w, vehicle.h]
-                actual_size = paired_gt_vehicle.size
-                @info "Estimated size error: $(norm(actual_size-estimated_size))"
-            end
-        end
-    end
-end
+# WHat happens when thing disappears?
 
 function localize(gps_channel, imu_channel, localization_state_channel)
     # Set up algorithm / initialize variables
@@ -118,6 +66,31 @@ function localize(gps_channel, imu_channel, localization_state_channel)
     end 
 end
 
+
+function f(x, u, ω, Δ)
+    [
+        x[1] + Δ * cos(
+    ]
+
+"""
+Measurement func -> map real state to measurement
+
+Camera projection function? Yes
+"""
+function h(x)
+
+end
+
+"""
+The process model 
+P(x | x₋₁, u)
+
+Do we actually know the u's?
+
+The measurement model
+
+
+"""
 function perception(cam_meas_channel, localization_state_channel, perception_state_channel)
     # set up stuff
     while true
@@ -128,8 +101,52 @@ function perception(cam_meas_channel, localization_state_channel, perception_sta
         end
 
         latest_localization_state = fetch(localization_state_channel)
+
+        # TODO: Need to understand how the camera transformation works
+        #       Ah, this is using in h functions
+
+        x = latest_localization_state.x
+
+        # NO u OR m!
+        # uₖ = u_constant
+        # mₖ = uₖ + sqrt(proc_cov) * randn(rng, 2) # Noisy IMU measurement.
+        Δ = meas_freq + meas_jitter * (2*rand(rng) - 1)
+        ω_true = sqrt(dist_cov) * randn(rng, 2)
+        xₖ = f(x_prev, uₖ, ω_true, Δ)
+        x_prev = xₖ
+        # u_prev = uₖ
+        zₖ = h(xₖ) + sqrt(meas_var) * randn(rng, 2)
         
+        # TODO: iterate through the bounding boxes -- do we do an update for each 
+        #       bounding boxes? 
+
         # process bounding boxes / run ekf / do what you think is good
+
+        # TODO: Define f, μ, m, and calc jacobians
+
+        # TODO: Is F rigid body dynamics, or function from lecture?
+
+        # A = jac_fx(μ, mₖ, zeros(2), Δ)
+        # B = jac_fu(μ, mₖ, zeros(2), Δ)
+        # L = jac_fω(μ, mₖ, zeros(2), Δ) 
+
+        # μ̂ = f(μ, mₖ, zeros(2), Δ)
+        # Σ̂ = A*Σ*A' + B*proc_cov*B' + L*dist_cov*L'
+        # 
+        # C = jac_hx(μ̂)
+        # d = h(μ̂) - C*μ̂
+
+        # Σ = inv(inv(Σ̂) + C'*inv(meas_var)*C)
+        # μ = Σ * (inv(Σ̂) * μ̂ + C'*inv(meas_var) * (zₖ - d))
+
+        # TODO: How do we reconcile bounding boxes that reference the same 
+        #       car from two cameras? 
+        #       When we push the vehicle states, do we just see if there are  
+        #       vehicles that seem to have the same dimensions and position?
+        #       Or do we figure out which bounding boxes refer to the same car
+        #       at the beginning and then include them in the same state?
+
+        # TODO: How do we track when cars enter and leave
 
         perception_state = MyPerceptionType(0,0.0)
         if isready(perception_state_channel)
@@ -156,7 +173,6 @@ function decision_making(localization_state_channel,
         serialize(socket, cmd)
     end
 end
-
 
 function isfull(ch:Channel)
     length(ch.data) ≥ ch.sz_max
@@ -198,5 +214,4 @@ function my_client(host::IPAddr=IPv4(0), port=4444)
     @async localize(gps_channel, imu_channel, localization_state_channel)
     @async perception(cam_channel, localization_state_channel, perception_state_channel)
     @async decision_making(localization_state_channel, perception_state_channel, map, socket)
-    @async test_algorithms(gt_channel, localization_state_channel, perception_state_channel, ego_vehicle_id)
 end
