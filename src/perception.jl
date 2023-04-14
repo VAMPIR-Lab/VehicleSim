@@ -92,7 +92,7 @@ function perception_h(x_other, x_ego, cam_id)
     bbox = []
     # bbox_unrounded are used to calculate the jacobian of h in float to be more precise
     bbox_unrounded = []
-    corners = []
+
     # NOTE: deal with having only 1 or 2 boxes here
     # similar to x_carrot = R * [q1 q2 q3] + t, turn points rotated cam frame
     corners_of_other_vehicle = [transform * [pt; 1] for pt in corners_body[j]]
@@ -102,6 +102,11 @@ function perception_h(x_other, x_ego, cam_id)
     top = image_height / 2
     bot = -image_height / 2
 
+    # keep track of the 3D points of corner values to use in jacoabian
+    top_cnr = [0 0 0]
+    left_cnr = [0 0 0]
+    bot_cnr = [0 0 0]
+    right_cnr = [0 0 0]
     # we are basically getting through each corner values in camera frame and 
     # keep updating the left, top, bottom, right values!
     for corner in corners_of_other_vehicle
@@ -109,13 +114,31 @@ function perception_h(x_other, x_ego, cam_id)
         if corner[3] < focal_len
             break
         end
+
         px = focal_len * corner[1] / corner[3]
         py = focal_len * corner[2] / corner[3]
+
+        # first update the corners
+        if px < left
+            left_cnr = corner
+        end
+        if px > right
+            right_cnr = corner
+        end
+        if py < top
+            top_cnr = corner
+        end
+        if py > bot
+            bot_cnr = corner
+        end
+
         left = min(left, px)
         right = max(right, px)
         top = min(top, py)
         bot = max(bot, py)
     end
+    corners = [top_cnr, left_cnr, bot_cnr, right_cnr]
+
 
     if top ≈ bot || left ≈ right || top > bot || left > right
         # out of frame - return empty bbox
@@ -135,25 +158,28 @@ function perception_h(x_other, x_ego, cam_id)
         push!(bbox, SVector(top, left, bot, right))
 
         # update bbox_unrounded
-        top_ur = convert_to_pixel_unrounded(image_height, pixel_len, top)
-        bot_ur = convert_to_pixel_unrounded(image_height, pixel_len, bot)
-        left_ur = convert_to_pixel_unrounded(image_height, pixel_len, left)
-        right_ur = convert_to_pixel_unrounded(image_height, pixel_len, right)
-        push!(bbox_unrounded, SVector(top_ur, left_ur, bot_ur, right_ur))
+        # top_ur = convert_to_pixel_unrounded(image_height, pixel_len, top)
+        # bot_ur = convert_to_pixel_unrounded(image_height, pixel_len, bot)
+        # left_ur = convert_to_pixel_unrounded(image_height, pixel_len, left)
+        # right_ur = convert_to_pixel_unrounded(image_height, pixel_len, right)
+        # push!(bbox_unrounded, SVector(top_ur, left_ur, bot_ur, right_ur))
     end
+
+
     return bbox, bbox_unrounded, corners
 end
 
 
 function calculate_J1_for_jac_hx(x_other)
+    # In perception_h, corners are set in the following format: 
+    # corners = [top_cnr, left_cnr, bot_cnr, right_cnr]
+
+
 
 end
 
-function perception_jac_hx(zk, x_other, x_ego, cam_id)
-    top = zk[1]
-    left = zk[2]
-    bot = zk[3]
-    right = zk[4]
+function perception_jac_hx(corner, x_other, x_ego, cam_id)
+
 
     # Calculate J1
 
@@ -230,7 +256,15 @@ function perception_ekf(xego, delta_t, cam_id)
         mu_carrot = perception_f(mus[k], delta_t)
 
         # Measurement model
-        C = perception_jac_hx(zk, mu_carrot, xego, cam_id)
+        # In perception_h, corners are set in the following format: 
+        # corners = [top_cnr, left_cnr, bot_cnr, right_cnr]
+        C_top = perception_jac_hx(corners[1], mu_carrot, xego, cam_id)
+        C_left = perception_jac_hx(corners[2], mu_carrot, xego, cam_id)
+        C_bot = perception_jac_hx(corners[3], mu_carrot, xego, cam_id)
+        C_right = perception_jac_hx(corners[4], mu_carrot, xego, cam_id)
+
+        # now stack them up to have a 4 x 7 matrix
+        C = [C_top; C_left; C_bot; C_right]
         sigma_k = inv(inv(sig_carrot) + C' * inv(covariance_z) * C)
         mu_k = sigma_k * (inv(sigma_carrot) * mu_carrot + C' * inv(covariance_z) * zk)
 
