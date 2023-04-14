@@ -125,7 +125,18 @@ function server(max_vehicles=1,
                         try
                             while isopen(sock)
                                 sleep(0.001)
-                                car_cmd = deserialize(sock)
+                                local car_cmd
+                                received = false
+                                while true
+                                    @async eof(sock)
+                                    if bytesavailable(sock) > 0
+                                        car_cmd = deserialize(sock)
+                                        received = true
+                                    else
+                                        break
+                                    end
+                                end
+                                !received && continue
                                 put!(cmd_channels[vehicle_id], car_cmd)
                                 if !car_cmd.controlled
                                     close(sock)
