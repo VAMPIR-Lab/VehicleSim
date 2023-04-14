@@ -15,7 +15,6 @@ using Suppressor
 using Sockets
 using Serialization
 using StaticArrays
-using DifferentialEquations
 
 include("view_car.jl")
 include("objects.jl")
