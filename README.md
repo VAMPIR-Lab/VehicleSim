@@ -1,6 +1,8 @@
 # VehicleSim
 VehicleSim
 
+<img src="https://github.com/forrestlaine/VehicleSim/blob/main/parked_cars.png" />
+
 # Loading / instantiating code
 
 It is recommended to start julia with multiple threads, since many concurrent tasks will be executing. 
