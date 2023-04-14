@@ -86,8 +86,13 @@ function rigid_body_dynamics(position, quaternion, velocity, angular_vel, Δt)
     r = angular_vel
     mag = norm(r)
 
-    sᵣ = cos(mag*Δt / 2.0)
-    vᵣ = sin(mag*Δt / 2.0) * r/mag
+    if mag < 1e-5
+        sᵣ = 1.0
+        vᵣ = zeros(3)
+    else
+        sᵣ = cos(mag*Δt / 2.0)
+        vᵣ = sin(mag*Δt / 2.0) * axis
+    end
 
     sₙ = quaternion[1]
     vₙ = quaternion[2:4]
