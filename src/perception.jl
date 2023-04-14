@@ -144,6 +144,11 @@ function perception_h(x_other, x_ego, cam_id)
     return bbox, bbox_unrounded, corners
 end
 
+
+function calculate_J1_for_jac_hx(x_other)
+
+end
+
 function perception_jac_hx(zk, x_other, x_ego, cam_id)
     top = zk[1]
     left = zk[2]
