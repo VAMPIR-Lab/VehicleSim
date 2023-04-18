@@ -72,6 +72,7 @@ function server(max_vehicles=1,
             end
         end
         spawn_points[vehicle_id] = seg
+        @info "Spawning vehicle $vehicle_id at $(seg.id)\n"
         vehicle = spawn_car_on_map(all_visualizers, seg, chevy_base, chevy_visuals, chevy_joints, vehicle_id)
         @async sim_car(cmd_channels[vehicle_id], state_channels[vehicle_id], shutdown_channel, vehicle, vehicle_id)
         vehicles[vehicle_id] = vehicle
@@ -114,6 +115,9 @@ function server(max_vehicles=1,
                 sock = accept(server)
                 @info "Client accepted."
                 client_count = mod1(client_count+1, max_vehicles)
+
+                @info "Vehicle id $client_count requested."
+
                 if client_connections[client_count]
                     @error "Requested vehicle already in use!"
                     close(sock)
