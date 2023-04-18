@@ -6,15 +6,18 @@ using Random
 using Distributions
 using StatsBase
 
-mutable struct Particle {
+mutable struct Particle 
     Position::Vector{Float64}
     Quaternion::Quaternion
     Velocity::Vector{Float64}
     AngularVelocity::Vector{Float64}
     weight::Float64
-}
+end
+
+# localization_state_channel = Channel{Particle}(1)
 
 function rigid_body_dynamics_particle(particle::Particle, Δt)
+    noise_dist = Normal(0, 0.1);
     r = particle.AngularVelocity
     mag = norm(r)
 
@@ -29,71 +32,45 @@ function rigid_body_dynamics_particle(particle::Particle, Δt)
 
     new_position = particle.Position + Δt * particle.Velocity
     new_quaternion = [s; v]
-    new_velocity = particle.Velocity
-    new_angular_vel = particle.AngularVelocity
+    new_velocity = particle.Velocity + rand(noise_dist, 3)
+    new_angular_vel = particle.AngularVelocity + rand(noise_dist, 3)
     return [new_position; new_quaternion; new_velocity; new_angular_vel]
 end
 
-function gps_model(particle::Particle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([1.0, 1.0]), max_rate=20.0)
-    min_Δ = 1.0/max_rate
-    t = time()
+function gps_model(particle::Particle, gps_meas; sqrt_meas_cov = Diagonal([1.0, 1.0]), max_rate=20.0)
     T = get_gps_transform()
     gps_loc_body = T*[zeros(3); 1.0]
-    while true
-        sleep(0.0001)
-        state = fetch(state_channel)
-        tnow = time()
-        if tnow - t > min_Δ
-            t = tnow
-            # Predict measurement based on particle state
-            xyz_body = particle.position # position
-            q_body = particle.quaternion # quaternion
-            Tbody = get_body_transform(q_body, xyz_body)
-            xyz_gps = Tbody * [gps_loc_body; 1]
-            pred_meas = xyz_gps[1:2]
+    # Predict measurement based on particle state
+    xyz_body = particle.position # position
+    q_body = particle.quaternion # quaternion
+    Tbody = get_body_transform(q_body, xyz_body)
+    xyz_gps = Tbody * [gps_loc_body; 1]
+    pred_meas = xyz_gps[1:2]
 
-            # Generate actual measurement and update particle weight
-            meas = pred_meas + sqrt_meas_cov*randn(2)
-            likelihood = pdf(MvNormal(pred_meas, sqrt_meas_cov), meas)
-            particle.weight *= likelihood
-            gps_meas = GPSMeasurement(t, meas[1], meas[2])
-            put!(meas_channel, gps_meas)
-        end
-    end
+    # Generate actual measurement and update particle weight
+    particle_likelihood = likelihood(pred_meas, gps_meas, sqrt_meas_cov)
+    particle.weight *= particle_likelihood
 end
 
-function imu_model(particle::Particle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([0.01, 0.01, 0.01, 0.01, 0.01, 0.01]), max_rate=20.0)
-    min_Δ = 1.0/max_rate
-    t = time()
+
+function imu_model(particle::Particle, imu_meas; sqrt_meas_cov = Diagonal([0.01, 0.01, 0.01, 0.01, 0.01, 0.01]), max_rate=20.0)
     T_body_imu = get_imu_transform()
     T_imu_body = invert_transform(T_body_imu)
     R = T_imu_body[1:3,1:3]
     p = T_imu_body[1:3,end]
 
-    while true
-        sleep(0.0001)
-        state = fetch(state_channel)
-        tnow = time()
-        if tnow - t > min_Δ
-            t = tnow
-            # Predict measurement based on particle state
-            v_body = particle.Velocity # velocity
-            ω_body = particle.AngularVelocity # angular_vel
+    # Predict measurement based on particle state
+    v_body = particle.Velocity # velocity
+    ω_body = particle.AngularVelocity # angular_vel
 
-            ω_imu = R * ω_body
-            v_imu = R * v_body + p × ω_imu
+    ω_imu = R * ω_body
+    v_imu = R * v_body + p × ω_imu
 
-            pred_meas = [v_imu; ω_imu]
+    pred_meas = [v_imu; ω_imu]
 
-            # Generate actual measurement and update particle weight
-            meas = pred_meas + sqrt_meas_cov*randn(6)
-            likelihood = pdf(MvNormal(pred_meas, sqrt_meas_cov), meas)
-            particle.weight *= likelihood
-
-            imu_meas = IMUMeasurement(t, meas[1:3], meas[4:6])
-            put!(meas_channel, imu_meas)
-        end
-    end
+    # Generate actual measurement and update particle weight
+    particle_likelihood = likelihood(pred_meas, imu_meas, sqrt_meas_cov)
+    particle.weight *= likelihood
 end
 
 function likelihood(predicted_meas, actual_meas, noise_cov)
@@ -141,6 +118,13 @@ function compute_state_estimate(particles::Vector{Particle})
     return state_estimate
 end
 
+function flush_channel(channel)
+    meas_arr = []
+    while isready(channel)
+        meas = take!(channel)
+        append!(meas_arr, meas)
+    end
+end
 
 function localization(gps_channel, imu_channel, localization_state_channel)
 ### Step 1: Initialize particles with Gaussian distribution centered around first GPS Measurement
@@ -156,7 +140,7 @@ function localization(gps_channel, imu_channel, localization_state_channel)
     initial_ang_vel = [0.0; 0.0; 0.0]
 
     # Quaternion
-    initial_quat = [1.0; 0.0; 1.0; 0.0]
+    initial_quat = [1.0; 0.0; 1.0; 0.0] # get lane segment from initial position and assume forward convert orientation to quaternion
 
     # Initialize particles with Gaussian distribution centered around first GPS Measurement
     num_particles = 100
@@ -171,58 +155,69 @@ function localization(gps_channel, imu_channel, localization_state_channel)
         particle_quat = initial_quat
         particle_lin_vel = initial_lin_vel
         particle_ang_vel = initial_ang_vel
-        particle_state = State(particle_pos, particle_quat, particle_lin_vel, particle_ang_vel)
-        particle = Particle(particle_state, 1.0/num_particles)
+        particle = Particle(particle_pos, particle_quat, particle_lin_vel, particle_ang_vel, 1.0/num_particles)
         push!(particles, particle)
     end
 
+    t = initial_gps_meas.time
     while true
-        if isready(gps_channel) || isready(imu_channel)
 
-### Step 2: Prediction Step - Propagate each particle forward using Rigid Body Dynamics
-        # Get time difference
-        fresh_gps_meas = take!(gps_channel)
-        fresh_imu_meas = take!(imu_channel)
-        Δt = fresh_gps_meas.time - initial_gps_meas.time
-        # Propagate each particle forward using Rigid Body Dynamics
-        for i in 1:num_particles
-            particles[i] = rigid_body_dynamics_particle(particles[i], Δt)
-        end
-
-### Step 3: Update Step - Update particle weights based on GPS and IMU measurements
-    # Generate predicted GPS and IMU measurements for each particle
-        for i in 1:num_particles
-            # Predict GPS measurement
-            predicted_gps_meas = gps_model(particles[i], state_channel, gps_channel; sqrt_meas_cov = Diagonal([1.0, 1.0]), max_rate=20.0)
-
-            # Predict IMU measurement
-            predicted_imu_meas = imu_model(particles[i], state_channel, imu_channel; sqrt_meas_cov = Diagonal([0.01, 0.01, 0.01, 0.01, 0.01, 0.01]), max_rate=20.0)
-
-            # Compute the likelihood of the actual GPS measurement given the predicted GPS measurement and the measurement noise covariance matrix
-            gps_likelihood = likelihood(predicted_gps_meas, fresh_gps_meas, gps_noise_cov)
-
-            # Compute the likelihood of the actual IMU measurement given the predicted IMU measurement and the measurement noise covariance matrix
-            imu_likelihood = likelihood(predicted_imu_meas, fresh_imu_meas, imu_noise_cov)
-
-            # Update particle weight
-            particles[i].weight *= gps_likelihood * imu_likelihood
-        end
-### Step 4: Normalize particle weights
-            # Normalize particle weights
-            weights = [p.weight for p in particles]
-            weights = weights ./ sum(weights)
+        # if both channels are ready, default to GPS measurement
+        if isready(gps_channel) && isready(imu_channel) 
+            fresh_gps_meas = take!(gps_channel)
+            flush_channel(gps_channel)
+            Δt = fresh_gps_meas.time - t # needs to be latest time
+            t = fresh_gps_meas.time
+            
+            # Propagate forward
             for i in 1:num_particles
-                particles[i].weight = weights[i]
+                particles[i] = rigid_body_dynamics_particle(particles[i], Δt)
             end
+
+            # Update Step
+            for i in 1:num_particles
+                # Predict GPS measurement
+                gps_likelihood = gps_model(particles[i],fresh_gps_meas; sqrt_meas_cov = Diagonal([1.0, 1.0]), max_rate=20.0)
+                particles[i].weight *= gps_likelihood
+            end
+
+        elseif isready(imu_channel)
+            fresh_imu_meas = take!(imu_channel)
+            flush_channel(imu_channel)
+            Δt = fresh_imu_meas.time - t # needs to be latest time
+            t = fresh_imu_meas.time
+
+            # Propagate forward
+            for i in 1:num_particles
+                particles[i] = rigid_body_dynamics_particle(particles[i], Δt)
+            end
+
+            # Update Step
+            for i in 1:num_particles
+                # Predict GPS measurement
+                imu_likelihood = imu_model(particles[i], fresh_imu_meas; sqrt_meas_cov = Diagonal([0.01, 0.01, 0.01, 0.01, 0.01, 0.01]), max_rate=20.0)
+                particles[i].weight *= imu_likelihood
+            end
+        else
+            continue
+        end
+
+### Step 4: Normalize particle weights
+        # Normalize particle weights
+        weights = [p.weight for p in particles]
+        weights = weights ./ sum(weights)
+        for i in 1:num_particles
+            particles[i].weight = weights[i]
+        end
         
 ### Step 5: Resample particles
-            # Resample particles
-            particles = resample(particles)
-        end
+        # Resample particles
+        particles = resample(particles)
         estimated_state = compute_state_estimate(particles)
         put!(localization_state_channel, estimated_state)
     end
 end
+
 
 
 
