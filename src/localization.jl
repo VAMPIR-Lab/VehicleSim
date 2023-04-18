@@ -118,12 +118,28 @@ function compute_state_estimate(particles::Vector{Particle})
     return state_estimate
 end
 
-function flush_channel(channel)
-    meas_arr = []
-    while isready(channel)
+# We don't really need to store these measurements but may be useful later
+function flush_channel(channel::Channel)
+    meas_dict = Dict{meas::Measurement}()
+    count = 0
+    while isready(channel) && count < 10
         meas = take!(channel)
-        append!(meas_arr, meas)
+        measurements_dict[count+1] = meas
+        count += 1
     end
+end
+
+function get_initial_quaternion(seg::RoadSegment, particle::Particle)
+    # Compute the tangent vector at the start of the segment
+    tangent = normalize(seg.Points[:, 2] - seg.Points[:, 1])
+    
+    # Compute the rotation axis and angle needed to rotate the initial orientation
+    # vector to align it with the tangent vector
+    axis = cross(SVector(1.0, 0.0, 0.0), tangent)
+    angle = acos(dot(SVector(1.0, 0.0, 0.0), tangent))
+    
+    # Convert the axis and angle to a quaternion
+    particle.Quaternion = (exp(angle/2)*cos(norm(axis)/2), normalize(axis)*sin(norm(axis)/2))
 end
 
 function localization(gps_channel, imu_channel, localization_state_channel)
@@ -139,20 +155,19 @@ function localization(gps_channel, imu_channel, localization_state_channel)
     initial_lin_vel = [0.0; 0.0; 0.0]
     initial_ang_vel = [0.0; 0.0; 0.0]
 
-    # Quaternion
-    initial_quat = [1.0; 0.0; 1.0; 0.0] # get lane segment from initial position and assume forward convert orientation to quaternion
+    
 
     # Initialize particles with Gaussian distribution centered around first GPS Measurement
     num_particles = 100
     particles = []
     lat_dist = Normal(initial_pos[0], 1)
     long_dist = Normal(initial_pos[1], 1)
-
     particle_lat = rand(lat_dist, num_particles)
     particle_long = rand(long_dist, num_particles)
     for i in 1:num_particles
         particle_pos = [particle_lat[i]; particle_long[i]; 0.0]
-        particle_quat = initial_quat
+        seg_id = get_segment(training_map(), particle.Position)
+        particle.Quaternion = get_initial_quaternion(seg_id, particle) # Set initial orientation to be tangent to road
         particle_lin_vel = initial_lin_vel
         particle_ang_vel = initial_ang_vel
         particle = Particle(particle_pos, particle_quat, particle_lin_vel, particle_ang_vel, 1.0/num_particles)
