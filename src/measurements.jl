@@ -164,7 +164,7 @@ function multiply_transforms(T1, T2)
     T = T[1:3, :]
 end
 
-function gps(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([1.0, 1.0]), max_rate=20.0)
+function gps(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([1.0, 1.0]), max_rate=10.0)
     min_Δ = 1.0/max_rate
     t = time()
     T = get_gps_transform()
@@ -186,7 +186,7 @@ function gps(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([1.0
     end
 end
 
-function imu(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([0.01, 0.01, 0.01, 0.01, 0.01, 0.01]), max_rate=20.0)
+function imu(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([0.01, 0.01, 0.01, 0.01, 0.01, 0.01]), max_rate=10.0)
     min_Δ = 1.0/max_rate
     t = time()
     T_body_imu = get_imu_transform()
@@ -293,10 +293,11 @@ function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_le
                             top = convert_to_pixel(image_height, pixel_len, top)
                             bot = convert_to_pixel(image_height, pixel_len, bot)
                             left = convert_to_pixel(image_width, pixel_len, left)
-                            top = convert_to_pixel(image_width, pixel_len, right)
+                            right = convert_to_pixel(image_width, pixel_len, right)
                             push!(bboxes, SVector(top, left, bot, right))
                         end
                     end
+                
                     meas = CameraMeasurement(t, camera_id, focal_len, pixel_len, image_width, image_height, bboxes)
                     put!(cam_channels[i], meas)
                 end
