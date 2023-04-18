@@ -256,7 +256,6 @@ function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_le
         if tnow - t > min_Δ
             t = tnow
             for i = 1:num_vehicles             
-                bboxes = []
                 ego_state = states[i]
                 T_world_body = get_body_transform(ego_state.q[1:4], ego_state.q[5:7])
                 T_world_camrot1 = multiply_transforms(T_world_body, T_body_camrot1)
@@ -264,6 +263,7 @@ function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_le
                 T_camrot1_world = invert_transform(T_world_camrot1)
                 T_camrot2_world = invert_transform(T_world_camrot2)
                 for (camera_id, transform) in zip((1,2), (T_camrot1_world, T_camrot2_world))
+                    bboxes = []
                     
                     for j = 1:num_vehicles
                         j == i && continue
