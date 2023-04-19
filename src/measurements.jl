@@ -75,6 +75,27 @@ function Rot_from_quat(q)
          2(qx*qz-qw*qy) 2(qw*qx+qy*qz) qw^2-qx^2-qy^2+qz^2]
 end
 
+function J_R_q(q)
+    qw = q[1]
+    qx = q[2]
+    qy = q[3]
+    qz = q[4]
+
+    dRdq1 = 2*[qw -qz qy;
+             qz qw -qx;
+             -qy qx qw]
+    dRdq2 = 2*[qx qy qz;
+               qy -qx -qw;
+               qz qw -qx]
+    dRdq3 = 2*[-qy qx qw;
+               qx qy qz;
+               -qw qz -qy]
+    dRdq4 = 2*[-qz -qw qx;
+               qw -qz qy;
+               qx qy qz]
+    (dRdq1, dRdq2, dRdq3, dRdq4)
+end
+
 """
 Can be used as process model for EKF
 which estimates xₖ = [position; quaternion; velocity; angular_vel]
@@ -91,7 +112,7 @@ function rigid_body_dynamics(position, quaternion, velocity, angular_vel, Δt)
         vᵣ = zeros(3)
     else
         sᵣ = cos(mag*Δt / 2.0)
-        vᵣ = sin(mag*Δt / 2.0) * axis
+        vᵣ = sin(mag*Δt / 2.0) * (r / mag)
     end
 
     sₙ = quaternion[1]
@@ -100,11 +121,73 @@ function rigid_body_dynamics(position, quaternion, velocity, angular_vel, Δt)
     s = sₙ*sᵣ - vₙ'*vᵣ
     v = sₙ*vᵣ+sᵣ*vₙ+vₙ×vᵣ
 
-    new_position = position + Δt * velocity
+    R = Rot_from_quat(quaternion)  
+
+    new_position = position + Δt * R * velocity
     new_quaternion = [s; v]
     new_velocity = velocity
     new_angular_vel = angular_vel
     return [new_position; new_quaternion; new_velocity; new_angular_vel]
+end
+
+function f(x, Δt)
+    rigid_body_dynamics(x[1:3], x[4:7], x[8:10], x[11:13], Δt)
+end
+
+function Jac_x_f(x, Δt)
+    J = zeros(13, 13)
+
+    r = x[11:13]
+    mag = norm(r)
+    if mag < 1e-5
+        sᵣ = 1.0
+        vᵣ = zeros(3)
+    else
+        sᵣ = cos(mag*Δt / 2.0)
+        vᵣ = sin(mag*Δt / 2.0) * (r / mag)
+    end
+
+    sₙ = x[4]
+    vₙ = x[5:7]
+
+    s = sₙ*sᵣ - vₙ'*vᵣ
+    v = sₙ*vᵣ+sᵣ*vₙ+vₙ×vᵣ
+
+    R = Rot_from_quat([sₙ; vₙ])  
+    (J_R_q1, J_R_q2, J_R_q3, J_R_q4) = J_R_q([sₙ; vₙ])
+    
+    #new_position = position + Δt * R * velocity
+    #new_quaternion = [s; v]
+    #new_velocity = velocity
+    #new_angular_vel = angular_vel
+    
+    velocity = x[8:10]
+
+    J[1:3, 1:3] = I(3)
+    J[1:3, 4] = Δt * J_R_q1*velocity
+    J[1:3, 5] = Δt * J_R_q2*velocity
+    J[1:3, 6] = Δt * J_R_q3*velocity
+    J[1:3, 7] = Δt * J_R_q4*velocity
+    J[1:3, 8:10] = Δt * R
+    J[4, 4] = sᵣ
+    J[4, 5:7] = -vᵣ'
+    J[5:7, 4] = vᵣ
+    J[5:7, 5:7] = [sᵣ vᵣ[3] -vᵣ[2];
+                   -vᵣ[3] sᵣ vᵣ[1];
+                   vᵣ[2] -vᵣ[1] sᵣ]
+ 
+    Jsv_srvr = [sₙ -vₙ'
+                vₙ [sₙ -vₙ[3] vₙ[2];
+                    vₙ[3] sₙ -vₙ[1];
+                    -vₙ[2] vₙ[1] sₙ]]
+    Jsrvr_mag = [-sin(mag*Δt / 2.0) * Δt / 2; sin(mag*Δt/2.0) * (-r / mag^2) + cos(mag*Δt/2)*Δt/2 * r/mag]
+    Jsrvr_r = [zeros(1,3); sin(mag*Δt / 2) / mag * I(3)]
+    Jmag_r = 1/mag * r'
+
+    J[4:7, 11:13] = Jsv_srvr * (Jsrvr_mag*Jmag_r + Jsrvr_r)
+    J[8:10, 8:10] = I(3)
+    J[11:13, 11:13] = I(3)
+    J
 end
 
 function get_rotated_camera_transform()
@@ -186,7 +269,7 @@ function gps(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([1.0
     end
 end
 
-function imu(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([0.01, 0.01, 0.01, 0.01, 0.01, 0.01]), max_rate=10.0)
+function imu(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([0., 0., 0., 0., 0., 0.]), max_rate=10.0) # Don't use 
     min_Δ = 1.0/max_rate
     t = time()
     T_body_imu = get_imu_transform()
