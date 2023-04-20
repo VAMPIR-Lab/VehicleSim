@@ -44,8 +44,9 @@ function server(max_vehicles=1,
     server_visualizer = get_vis(map, true, host)
     @info "Server can be connected to at $host and port $port"
     @info inform_hostport(server_visualizer, "Server visualizer")
-    client_visualizers = [get_vis(map, false, host) for _ in 1:max_vehicles]
-    all_visualizers = [client_visualizers; server_visualizer]
+    #client_visualizers = [get_vis(map, false, host) for _ in 1:max_vehicles]
+    #all_visualizers = [client_visualizers; server_visualizer]
+    all_visualizers = [server_visualizer,]
 
     (; urdf_path, chevy_base, chevy_joints) = load_mechanism()
     chevy_visuals = URDFVisuals(urdf_path, package_path=[dirname(pathof(VehicleSim))])
@@ -57,7 +58,9 @@ function server(max_vehicles=1,
     state_channels = Dict(id=>Channel{MechanismState}(1) for id in 1:max_vehicles)
     cmd_channels = Dict(id=>Channel{VehicleCommand}(1) for id in 1:max_vehicles)
     meas_channels = Dict(id=>Channel{MeasurementMessage}(1) for id in 1:max_vehicles)
+    watch_channel = Channel{Int}(1)
     shutdown_channel = Channel{Bool}(1)
+    put!(watch_channel, 0)
 
     for vehicle_id in 1:max_vehicles
         local seg
@@ -77,7 +80,7 @@ function server(max_vehicles=1,
         vehicles[vehicle_id] = vehicle
     end
 
-    @async visualize_vehicles(vehicles, state_channels, shutdown_channel)
+    errormonitor(@async visualize_vehicles(vehicles, state_channels, shutdown_channel, watch_channel))
 
     measure_vehicles(map, 
                      vehicles, 
@@ -119,7 +122,8 @@ function server(max_vehicles=1,
                     close(sock)
                     break
                 end
-                serialize(sock, inform_hostport(client_visualizers[client_count], "Client follow-cam"))
+                #serialize(sock, inform_hostport(client_visualizers[client_count], "Client follow-cam"))
+                serialize(sock, inform_hostport(all_visualizers[1], "Don't connect to this."))
                 let vehicle_id=client_count
                     @async begin
                         try
@@ -137,7 +141,7 @@ function server(max_vehicles=1,
                                         car_cmd = deserialize(sock)
                                         received = true
                                     else
-                                        !istaskdone(t) && schedule(t, InterruptException(); error=true)
+                                        #!istaskdone(t) && schedule(t, InterruptException(); error=true)
                                         break
                                     end
                                 end
@@ -176,7 +180,54 @@ function server(max_vehicles=1,
             end
         end
     end)
-    shutdown_channel
+    update_viewer(watch_channel, shutdown_channel)
+end
+
+function update_viewer(watch_channel, shutdown_channel)
+    while true
+        sleep(0.1)
+        key = get_c()
+        if key == 'q'
+            # terminate vehicle 
+            @info "Shutting down server."
+            shutdown!(shutdown_channel)
+            break
+        elseif key == '0'
+            @info "Switching to server view"
+            take!(watch_channel)
+            put!(watch_channel, 0)
+        elseif key == '1'
+            @info "Switching view to vehicle 1"
+            take!(watch_channel)
+            put!(watch_channel, 1)
+        elseif key == '2'
+            @info "Switching view to vehicle 2"
+            take!(watch_channel)
+            put!(watch_channel, 2)
+        elseif key == '3'
+            @info "Switching view to vehicle 3"
+            take!(watch_channel)
+            put!(watch_channel, 3)
+        elseif key == '4'
+            @info "Switching view to vehicle 4"
+            take!(watch_channel)
+            put!(watch_channel, 4)
+        elseif key == '5'
+            @info "Switching view to vehicle 5"
+            take!(watch_channel)
+            put!(watch_channel, 5)
+        elseif key == '6'
+            @info "Switching view to vehicle 6"
+            take!(watch_channel)
+            put!(watch_channel, 6)
+        elseif key == '7'
+            @info "Switching view to vehicle 7"
+            take!(watch_channel)
+            put!(watch_channel, 7)
+        else
+            @info "Unrecognized command, try again."
+        end
+    end
 end
 
 function shutdown!(shutdown_channel)

@@ -1,5 +1,6 @@
 function get_vis(map=nothing, open_vis=true, host::IPAddr = ip"127.0.0.1", default_port=8700)
-    vis = @suppress Visualizer(MeshCat.CoreVisualizer(host, default_port), ["meshcat"])
+    #vis = @suppress Visualizer(MeshCat.CoreVisualizer(host, default_port), ["meshcat"])
+    vis = Visualizer(MeshCat.CoreVisualizer(host, default_port), ["meshcat"])
     if !isnothing(map)
         view_map(vis, map)
     end
@@ -18,7 +19,6 @@ end
 function extract_yaw_from_quaternion(q)
     atan(2(q[1]*q[4]+q[2]*q[3]), 1-2*(q[3]^2+q[4]^2))
 end
-
 
 function remove_grid!(vis)
     delete!(vis["/Grid"])
@@ -107,7 +107,7 @@ function configure_contact_points!(chevy)
     end
 end
 
-function visualize_vehicles(vehicles, state_channels, shutdown_channel;
+function visualize_vehicles(vehicles, state_channels, shutdown_channel, watch_channel;
                             follow_dist=35.0,
                             follow_height=6.0,
                             follow_offset=6.0)
@@ -116,12 +116,21 @@ function visualize_vehicles(vehicles, state_channels, shutdown_channel;
         if isready(shutdown_channel)
             fetch(shutdown_channel) && break
         end
+        vehicle_to_watch = fetch(watch_channel)
+        state_to_watch =  vehicle_to_watch == 0 ? nothing : fetch(state_channels[vehicle_to_watch])
+        all_vis = [mvis.visualizer for mvis in vehicles[1].mviss]
         for i in keys(vehicles)
             mviss = vehicles[i].mviss
             if isready(state_channels[i])
                 state = fetch(state_channels[i])
                 config = configuration(state)
                 foreach(mvis->set_configuration!(mvis, config), mviss)
+            end
+        end
+        for vis in all_vis
+            if vehicle_to_watch > 0
+                config = configuration(state_to_watch)
+
                 quat = config[1:4]
                 pose = config[5:7]
                 yaw = extract_yaw_from_quaternion(quat) 
@@ -129,8 +138,15 @@ function visualize_vehicles(vehicles, state_channels, shutdown_channel;
                 offset = [follow_dist * [cos(yaw), sin(yaw)]; -follow_height] +
                          follow_offset * [sin(yaw), -cos(yaw), 0]
 
-                setcameratarget!(mviss[i].visualizer, pose)
-                setcameraposition!(mviss[i].visualizer, pose-offset)
+                setcameratarget!(vis, pose)
+                setcameraposition!(vis, pose-offset)
+                path = "/Cameras/default/rotated/<object>"
+                setprop!(vis[path], "zoom", 1.0)
+            elseif vehicle_to_watch == 0
+                setcameratarget!(vis, [0.0,0,0])
+                setcameraposition!(vis, [0,0,95.0])
+                path = "/Cameras/default/rotated/<object>"
+                setprop!(vis[path], "zoom", 0.5)
             end
         end
     end
