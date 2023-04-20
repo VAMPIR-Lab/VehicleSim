@@ -470,15 +470,22 @@ function update_targets(target_channels, state_channels, target_segments, map)
             if reached_target(pos, vel, map[current_target])
                 scores[i] += 1
                 new_target = rand(setdiff(target_segments, current_target))
-		@info "Vehicle $i reached target! New target is $new_target"
-		for i = 1:length(target_channels)
-		    @info "Scores: team $i has $(scores[i]) successful pickup/dropoffs"
-		end
+		        @info "Vehicle $i reached target! New target is $new_target"
+		        for i = 1:length(target_channels)
+		            @info "Scores: team $i has $(scores[i]) successful pickup/dropoffs"
+		        end
                 take!(target_channels[i])
-		put!(target_channels[i], new_target)
+		        put!(target_channels[i], new_target)
             end
         end
     end
+end
+
+function totalshutdown(c)
+    while isready(c)
+        take!(c)
+    end
+    close(c)
 end
 
 function measure_vehicles(map,
@@ -503,29 +510,30 @@ function measure_vehicles(map,
     imu_channels = [Channel{IMUMeasurement}(32) for _ in 1:num_vehicles]
     cam_channels = [Channel{CameraMeasurement}(32) for _ in 1:num_vehicles]
     gt_channels = [Channel{GroundTruthMeasurement}(32) for _ in 1:num_vehicles]
+    target_channels = [Channel{Int}(1) for _ in 1:num_vehicles]
     
     shutdown = false
     @async while true
         if isready(shutdown_channel)
             shutdown = fetch(shutdown_channel)
             if shutdown
-                foreach(c->close(c), [gps_channels; imu_channels; cam_channels; gt_channels])
-                foreach(c->close(c), values(meas_channels))
-                foreach(c->close(c), values(state_channels))
+                foreach(c->totalshutdown(c), [gps_channels; imu_channels; cam_channels; gt_channels])
+                foreach(c->totalshutdown(c), values(meas_channels))
+                foreach(c->totalshutdown(c), values(state_channels))
+                foreach(c->totalshutdown(c), target_channels)
                 break
             end
         end
         sleep(0.1)
     end
     
-    target_channels = [Channel{Int}(1) for _ in 1:num_vehicles]
     for id in 1:num_vehicles
 	target = rand(target_segments)
 	@info "Target for vehicle $id: $target"
         put!(target_channels[id], target)
     end
 
-    errormonitor(@async update_targets(target_channels, state_channels, target_segments, map))
+    @async update_targets(target_channels, state_channels, target_segments, map)
 
     # Centralized Measurements
     measure_gt && @async ground_truth(vehicles, state_channels, gt_channels)

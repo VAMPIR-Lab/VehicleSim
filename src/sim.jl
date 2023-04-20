@@ -125,17 +125,25 @@ function server(max_vehicles=1,
                         try
                             while isopen(sock)
                                 sleep(0.001)
+                                if isready(shutdown_channel) && fetch(shutdown_channel)
+                                    close(sock)
+                                    break
+                                end
                                 local car_cmd
                                 received = false
                                 while true
-                                    @async eof(sock)
+                                    t = @async eof(sock)
                                     if bytesavailable(sock) > 0
                                         car_cmd = deserialize(sock)
                                         received = true
                                     else
+                                        !istaskdone(t) && schedule(t, InterruptException(); error=true)
                                         break
                                     end
                                 end
+                                car_cmd = deserialize(sock)
+                                received = true
+
                                 !received && continue
                                 put!(cmd_channels[vehicle_id], car_cmd)
                                 if !car_cmd.controlled
@@ -150,6 +158,9 @@ function server(max_vehicles=1,
                         try
                             while isopen(sock)
                                 sleep(0.001)
+                                if isready(shutdown_channel) && fetch(shutdown_channel)
+                                    break
+                                end
                                 if isready(meas_channels[vehicle_id])
                                     msg = take!(meas_channels[vehicle_id])
                                     serialize(sock, msg)
@@ -236,6 +247,9 @@ function sim_car(cmd_channel, state_channel, shutdown_channel, vehicle, vehicle_
 
     @async while true
         sleep(0.001)
+        if isready(shutdown_channel)
+            fetch(shutdown_channel) && break
+        end
         if isready(cmd_channel)
             car_cmd = take!(cmd_channel)
             set_reference!(car_cmd)
