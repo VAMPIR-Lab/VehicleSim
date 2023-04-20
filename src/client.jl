@@ -5,10 +5,14 @@ struct VehicleCommand
 end
 
 function get_c()
-    ret = ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), stdin.handle, true)
-    ret == 0 || error("unable to switch to raw mode")
-    c = read(stdin, Char)
-    ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), stdin.handle, false)
+    c = 'x'
+    try
+        ret = ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), stdin.handle, true)
+        ret == 0 || error("unable to switch to raw mode")
+        c = read(stdin, Char)
+        ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), stdin.handle, false)
+    catch e
+    end
     c
 end
 
