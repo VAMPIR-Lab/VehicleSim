@@ -312,7 +312,7 @@ function gps(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([1.0
     end
 end
 
-function imu(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([0., 0., 0., 0., 0., 0.]), max_rate=10.0) # Don't use 
+function imu(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([0.001, 0.001, 0.001, 0.001, 0.001, 0.001]), max_rate=10.0) # Don't use 
     min_Δ = 1.0/max_rate
     t = time()
     T_body_imu = get_imu_transform()
