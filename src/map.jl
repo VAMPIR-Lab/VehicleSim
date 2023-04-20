@@ -231,8 +231,24 @@ function generate_lane_mesh(lb1, lb2, lane_type; width=0.3, res=1.0)
     (; obj, obj_end)
 end
 
+function ground_mesh()
+    green=RGBA{Float32}(0.34,0.49,0.27,1.0)
+    points = GeometryBasics.Point{3,Float64}[]
+    for x in [-200.0, 200.0]
+        for y in [-200.0, 200.0]
+            push!(points, GeometryBasics.Point{3,Float64}(x,y,-0.25))
+        end
+    end
+    faces = [GeometryBasics.TriangleFace(1,2,3), GeometryBasics.TriangleFace(2,4,3)]
+    mesh = GeometryBasics.Mesh(points, faces)
+    obj = MeshCat.Object(mesh, MeshPhongMaterial(color=green))
+end
+
+
 function view_map(vis, all_segs)
     delete!(vis["Grid"])
+    gm = ground_mesh()
+    setobject!(vis["ground"], gm)
     for (id, seg) in all_segs
         meshes = generate_road_segment_mesh(seg)
         for (mesh_id, m) in meshes
