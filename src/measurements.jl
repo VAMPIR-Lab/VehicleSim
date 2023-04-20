@@ -8,6 +8,7 @@ struct GPSMeasurement <: Measurement
     time::Float64
     lat::Float64
     long::Float64
+    heading::Float64
 end
 
 """
@@ -228,6 +229,14 @@ function get_body_transform(quat, loc)
     [R loc]
 end
 
+function J_Tbody(x)
+    J_Tbody_xyz = (zeros(3,4), zeros(3,4), zeros(3,4))
+    for i = 1:3
+       J_Tbody_xyz[i][i,4] = 1.0
+    end
+    return (J_Tbody_xyz, [[dR zeros(3)] for dR in J_R_q(x[4:7])])
+end
+
 function invert_transform(T)
     R = T[1:3,1:3]
     t = T[1:3,end]
@@ -247,23 +256,57 @@ function multiply_transforms(T1, T2)
     T = T[1:3, :]
 end
 
-function gps(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([1.0, 1.0]), max_rate=10.0)
-    min_Δ = 1.0/max_rate
-    t = time()
+function h_gps(x)
     T = get_gps_transform()
     gps_loc_body = T*[zeros(3); 1.0]
+    xyz_body = x[1:3] # position
+    q_body = x[4:7] # quaternion
+    Tbody = get_body_transform(q_body, xyz_body)
+    xyz_gps = Tbody * [gps_loc_body; 1]
+    yaw = extract_yaw_from_quaternion(q_body)
+    meas = [xyz_gps[1:2]; yaw]
+end
+
+function Jac_h_gps(x)
+    T = get_gps_transform()
+    gps_loc_body = T*[zeros(3); 1.0]
+    xyz_body = x[1:3] # position
+    q_body = x[4:7] # quaternion
+    Tbody = get_body_transform(q_body, xyz_body)
+    xyz_gps = Tbody * [gps_loc_body; 1]
+    yaw = extract_yaw_from_quaternion(q_body)
+    #meas = [xyz_gps[1:2]; yaw]
+    J = zeros(3, 13)
+    (J_Tbody_xyz, J_Tbody_q) = J_Tbody(x)
+    for i = 1:3
+        J[1:2,i] = (J_Tbody_xyz[i]*[gps_loc_body; 1])[1:2]
+    end
+    for i = 1:4
+	J[1:2,3+i] = (J_Tbody_q[i]*[gps_loc_body; 1])[1:2]
+    end
+    w = q_body[1]
+    x = q_body[2]
+    y = q_body[3]
+    z = q_body[4]
+    J[3,4] = -(2 * z * (-1 + 2 * (y^2 + z^2)))/(4 * (x * y + w * z)^2 + (1 - 2 * (y^2 + z^2))^2)
+    J[3,5] = -(2 * y * (-1 + 2 * (y^2 + z^2)))/(4 * (x * y + w * z)^2 + (1 - 2 * (y^2 + z^2))^2)
+    J[3,6] = (2 * (x + 2 * x * y^2 + 4 * w * y * z - 2 * x * z^2))/(1 + 4 * y^4 + 8 * w * x * y * z + 4 * (-1 + w^2) * z^2 + 4 * z^4 + 4 * y^2 * (-1 + x^2 + 2 * z^2))
+    J[3,7] = (2 * (w - 2 * w * y^2 + 4 * x * y * z + 2 * w * z^2))/(1 + 4 * y^4 + 8 * w * x * y * z + 4 * (-1 + w^2) * z^2 + 4 * z^4 + 4 * y^2 * (-1 + x^2 + 2 * z^2))
+    J
+end
+ 
+function gps(vehicle, state_channel, meas_channel; sqrt_meas_cov = Diagonal([1.0, 1.0, 0.1]), max_rate=10.0)
+    min_Δ = 1.0/max_rate
+    t = time()
     while true
         sleep(0.0001)
         state = fetch(state_channel)
         tnow = time()
         if tnow - t > min_Δ
             t = tnow
-            xyz_body = state.q[5:7] # position
-            q_body = state.q[1:4] # quaternion
-            Tbody = get_body_transform(q_body, xyz_body)
-            xyz_gps = Tbody * [gps_loc_body; 1]
-            meas = xyz_gps[1:2] + sqrt_meas_cov*randn(2)
-            gps_meas = GPSMeasurement(t, meas[1], meas[2])
+	    x = [state.q[5:7]; state.q[1:4]; state.v[4:6]; state.v[1:3]]
+	    meas = h_gps(x) + sqrt_meas_cov*randn(3)
+            gps_meas = GPSMeasurement(t, meas[1], meas[2], meas[3])
             put!(meas_channel, gps_meas)
         end
     end
