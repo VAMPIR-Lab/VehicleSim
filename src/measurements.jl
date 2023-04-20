@@ -413,6 +413,29 @@ function ground_truth(vehicles, state_channels, gt_channels; max_rate=10.0)
     end
 end
 
+function update_targets(target_channels, state_channels, target_segments, map)
+    scores = zeros(Int, length(target_channels))
+    while true
+        sleep(0.001)
+        for i = 1:length(target_channels)
+            current_target = fetch(target_channels[i])
+            state = fetch(state_channels[i])
+            pos = state.q[5:6]
+            vel = state.v[4]
+            if reached_target(pos, vel, map[current_target])
+                scores[i] += 1
+                new_target = rand(setdiff(target_segments, current_target))
+		@info "Vehicle $i reached target! New target is $new_target"
+		for i = 1:length(target_channels)
+		    @info "Scores: team $i has $(scores[i]) successful pickup/dropoffs"
+		end
+                take!(target_channels[i])
+		put!(target_channels[i], new_target)
+            end
+        end
+    end
+end
+
 function measure_vehicles(map,
         vehicles, 
         state_channels, 
@@ -451,10 +474,13 @@ function measure_vehicles(map,
     end
     
     target_channels = [Channel{Int}(1) for _ in 1:num_vehicles]
-    # Fixed target segments for now.
     for id in 1:num_vehicles
-        put!(target_channels[id], rand(target_segments))
+	target = rand(target_segments)
+	@info "Target for vehicle $id: $target"
+        put!(target_channels[id], target)
     end
+
+    errormonitor(@async update_targets(target_channels, state_channels, target_segments, map))
 
     # Centralized Measurements
     measure_gt && @async ground_truth(vehicles, state_channels, gt_channels)
