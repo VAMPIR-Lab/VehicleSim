@@ -125,25 +125,44 @@ function server(max_vehicles=1,
                 end
                 serialize(sock, inform_hostport(client_visualizers[client_count], "Client follow-cam"))
                 let vehicle_id=client_count
-                    errormonitor(@async begin
-                        while isopen(sock)
-                            sleep(0.001)
-                            car_cmd = deserialize(sock)
-                            put!(cmd_channels[vehicle_id], car_cmd)
-                            if !car_cmd.controlled
-                                close(sock)
-                           end
-                        end
-                    end)
-                    errormonitor(@async begin
-                        while isopen(sock)
-                            sleep(0.001)
-                            if isready(meas_channels[vehicle_id])       
-                                msg = take!(meas_channels[vehicle_id])
-                                serialize(sock, msg)
+                    @async begin
+                        try
+                            while isopen(sock)
+                                sleep(0.001)
+                                local car_cmd
+                                received = false
+                                while true
+                                    @async eof(sock)
+                                    if bytesavailable(sock) > 0
+                                        car_cmd = deserialize(sock)
+                                        received = true
+                                    else
+                                        break
+                                    end
+                                end
+                                !received && continue
+                                put!(cmd_channels[vehicle_id], car_cmd)
+                                if !car_cmd.controlled
+                                    close(sock)
+                               end
                             end
+                        catch e
+                            @warn "Error receiving command for vehicle $vehicle_id. Did client fail?"
                         end
-                    end)
+                    end
+                    @async begin
+                        try
+                            while isopen(sock)
+                                sleep(0.001)
+                                if isready(meas_channels[vehicle_id])
+                                    msg = take!(meas_channels[vehicle_id])
+                                    serialize(sock, msg)
+                                end
+                            end
+                        catch e
+                            @warn "Error sending measurements to vehicle $vehicle_id. Did client fail?"
+                        end
+                    end
                 end
             catch e
                 break
@@ -237,6 +256,7 @@ function sim_car(cmd_channel, state_channel, shutdown_channel, vehicle, vehicle_
                          publisher!;
                          max_realtime_rate=1.0)
     catch e
+        @warn "Terminating simulation for vehicle $vehicle_id."
         foreach(mvis->delete_vehicle!(mvis), mviss)
     end
 end
