@@ -176,16 +176,18 @@ function Jac_x_f(x, Δt)
     J[5:7, 5:7] = [sᵣ vᵣ[3] -vᵣ[2];
                    -vᵣ[3] sᵣ vᵣ[1];
                    vᵣ[2] -vᵣ[1] sᵣ]
- 
-    Jsv_srvr = [sₙ -vₙ'
-                vₙ [sₙ -vₙ[3] vₙ[2];
-                    vₙ[3] sₙ -vₙ[1];
-                    -vₙ[2] vₙ[1] sₙ]]
-    Jsrvr_mag = [-sin(mag*Δt / 2.0) * Δt / 2; sin(mag*Δt/2.0) * (-r / mag^2) + cos(mag*Δt/2)*Δt/2 * r/mag]
-    Jsrvr_r = [zeros(1,3); sin(mag*Δt / 2) / mag * I(3)]
-    Jmag_r = 1/mag * r'
 
-    J[4:7, 11:13] = Jsv_srvr * (Jsrvr_mag*Jmag_r + Jsrvr_r)
+    if mag > 1e-5
+        Jsv_srvr = [sₙ -vₙ'
+                    vₙ [sₙ -vₙ[3] vₙ[2];
+                        vₙ[3] sₙ -vₙ[1];
+                        -vₙ[2] vₙ[1] sₙ]]
+        Jsrvr_mag = [-sin(mag*Δt / 2.0) * Δt / 2; sin(mag*Δt/2.0) * (-r / mag^2) + cos(mag*Δt/2)*Δt/2 * r/mag]
+        Jsrvr_r = [zeros(1,3); sin(mag*Δt / 2) / mag * I(3)]
+        Jmag_r = 1/mag * r'
+
+        J[4:7, 11:13] = Jsv_srvr * (Jsrvr_mag*Jmag_r + Jsrvr_r)
+    end
     J[8:10, 8:10] = I(3)
     J[11:13, 11:13] = I(3)
     J
