@@ -464,6 +464,7 @@ function update_targets(target_channels, state_channels, target_segments, map)
         sleep(0.001)
         for i = 1:length(target_channels)
             current_target = fetch(target_channels[i])
+            current_target ≤ 0 && continue
             state = fetch(state_channels[i])
             pos = state.q[5:6]
             vel = state.v[4]
@@ -528,8 +529,8 @@ function measure_vehicles(map,
     end
     
     for id in 1:num_vehicles
-	target = rand(target_segments)
-	@info "Target for vehicle $id: $target"
+        target = isempty(target_segments) ? -1 : rand(target_segments)
+	    target >= 0 && @info "Target for vehicle $id: $target"
         put!(target_channels[id], target)
     end
 

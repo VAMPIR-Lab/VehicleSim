@@ -362,7 +362,7 @@ function get_initialization_point(seg)
     CarConfig(SVector(pt[1], pt[2], 3.25), 0, 0, yaw, 0)
 end
 
-function training_map(; lane_width = 10.0,
+function city_map(; lane_width = 10.0,
                         speed_limit = 10.0,
                         pullout_length = 40.0,
                         pullout_taper = 10.0,
@@ -400,6 +400,49 @@ function training_map(; lane_width = 10.0,
     segs_E = add_curved_segments!(all_segs, segs_E, south, false; turn_curvature, speed_limit, lane_width)
     segs_E = add_straight_segments!(all_segs, segs_E, west; length=block_length, speed_limit, lane_width, stop_outbound=true, stop_inbound=false)
     segs_I = add_segments!(all_segs, segs_E, west, segs_I)
+
+    all_segs
+end
+
+function training_map(; lane_width = 30.0,
+                        speed_limit = 10.0,
+                        pullout_length = 40.0,
+                        pullout_taper = 10.0,
+                        block_length = 200.0,
+                        turn_curvature = 0.1,
+                        intersection_curvature = 0.15)
+    turn_r = 1.0/turn_curvature
+    int_r = 1.0/intersection_curvature
+
+    shortened_block_length = block_length - 2*(turn_r-int_r)
+    single_shortened_block_length = block_length - (turn_r-int_r)
+
+    all_segs = Dict{Int, RoadSegment}()
+    segs = add_straight_segments!(all_segs, nothing, north; length=block_length, speed_limit, stop_outbound=true, lane_width)
+
+    #segs_I = add_fourway_intersection!(all_segs, nothing, nothing; intersection_curvature, speed_limit, lane_width)
+    #segs = add_straight_segments!(all_segs, segs_I, west; length=block_length, speed_limit, stop_outbound=true, stop_inbound=true)
+    #segs_T = add_T_intersection!(all_segs, segs, west, east; intersection_curvature, lane_width, speed_limit)
+    #segs_S = add_pullout_segments!(all_segs, segs_T, south; length=block_length, pullout_length, pullout_taper, lane_width, speed_limit, pullout_inbound=false, pullout_outbound=true)
+    #segs_S = add_curved_segments!(all_segs, segs_S, south, true; turn_curvature, speed_limit, lane_width)
+    #segs_S = add_pullout_segments!(all_segs, segs_S, east; length=shortened_block_length, pullout_length, pullout_taper, lane_width, speed_limit, pullout_inbound=true, pullout_outbound=false)
+    #segs_S = add_curved_segments!(all_segs, segs_S, east, true; turn_curvature, speed_limit, lane_width)
+    #segs_S = add_straight_segments!(all_segs, segs_S, north; length=block_length, speed_limit, stop_outbound=true, stop_inbound=false)
+    #segs_I = add_segments!(all_segs, segs_S, north, segs_I)
+
+    #segs_N = add_pullout_segments!(all_segs, segs_T, north; length=single_shortened_block_length, pullout_length, pullout_taper, lane_width, speed_limit, pullout_inbound=true, pullout_outbound=false)
+    #segs_N = add_curved_segments!(all_segs, segs_N, north, false; turn_curvature, speed_limit, lane_width)
+    #segs_N = add_straight_segments!(all_segs, segs_N, east; length=single_shortened_block_length, speed_limit, stop_outbound=true, stop_inbound=false)
+    #segs_N = add_T_intersection!(all_segs, segs_N, east, south; intersection_curvature, lane_width, speed_limit)
+    #segs_N2 = add_pullout_segments!(all_segs, segs_N, south; length=block_length, pullout_length, pullout_taper, lane_width, speed_limit, pullout_inbound=true, pullout_outbound=true, stop_inbound=true, stop_outbound=true)
+    #segs_I = add_segments!(all_segs, segs_N2, south, segs_I)
+
+    #segs_E = add_straight_segments!(all_segs, segs_N, east; length=block_length, speed_limit, lane_width, stop_inbound=true, stop_outbound=false)
+    #segs_E = add_curved_segments!(all_segs, segs_E, east, false; turn_curvature, speed_limit, lane_width)
+    #segs_E = add_pullout_segments!(all_segs, segs_E, south; length=shortened_block_length, pullout_length, pullout_taper, lane_width, speed_limit, pullout_inbound=true, pullout_outbound=false)
+    #segs_E = add_curved_segments!(all_segs, segs_E, south, false; turn_curvature, speed_limit, lane_width)
+    #segs_E = add_straight_segments!(all_segs, segs_E, west; length=block_length, speed_limit, lane_width, stop_outbound=true, stop_inbound=false)
+    #segs_I = add_segments!(all_segs, segs_E, west, segs_I)
 
     all_segs
 end

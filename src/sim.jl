@@ -33,16 +33,29 @@ end
 function server(max_vehicles=1, 
         port=4444; 
         full_state=true, 
+        map_type=:city,
         rng=MersenneTwister(1), 
         measure_gps=false, 
         measure_imu=false, 
         measure_cam=false, 
         measure_gt=false)
     host = getipaddr()
-    map = training_map()
+    if map_type == :city
+        map = city_map()
+    else
+        @assert max_vehicles==1
+        map = training_map()
+    end
     server_visualizer = get_vis(map, true, host)
-    @info "Server can be connected to at $host and port $port"
-    @info inform_hostport(server_visualizer, "Server visualizer")
+    server_info_string = 
+        "********************
+      CONNECTING TO SERVER
+      ********************
+        -Connect a keyboard client by running (in a new REPL):
+            using Vehicle Sim, Sockets; keyboard_client(ip\"$host\")
+        -Port for manual clients is $port"
+    @info server_info_string
+    #@info inform_hostport(server_visualizer, "Server visualizer")
     #client_visualizers = [get_vis(map, false, host) for _ in 1:max_vehicles]
     #all_visualizers = [client_visualizers; server_visualizer]
     all_visualizers = [server_visualizer,]
@@ -65,6 +78,11 @@ function server(max_vehicles=1,
         local seg
         while true
             seg_id = rand(rng, viable_segments)
+            if map_type ≠ :city
+                seg_id = 1
+                seg = map[seg_id]
+                break
+            end
             delete!(viable_segments, seg_id)
             if contains_lane_type(map[seg_id], intersection, stop_sign)
                 continue
@@ -183,52 +201,62 @@ function server(max_vehicles=1,
 end
 
 function update_viewer(watch_channel, shutdown_channel, max_vehicles)
-    @info "Press 'q' to shutdown server. Press a number 1-$max_vehicles to view the follow-cam for the associated vehicle. Press '0' to switch to bird's-eye view."
+    info_string = 
+        "***************
+      VIEWER COMMANDS
+      ***************
+            -Make sure focus is on this terminal window. Then:
+            -Press 'q' to shutdown server. 
+            -Press '0' to switch to bird's-eye view and release controls to user.
+            -Press a number '1'-'9' to view the follow-cam for the associated vehicle. Will default to '0' if vehicle doesn't exist.
+            -Use the 'shift' modifier to follow-cam from top-down (e.g. '!' for vehicle 1)."
+    @info info_string
     while true
         sleep(0.1)
         key = get_c()
-        intkey = try
-            parse(Int, key)
-        catch err
-            nothing
+
+        if key == '!'
+            intkey = 11
+        elseif key == '@'
+            intkey = 12
+        elseif key == '#'
+            intkey = 13
+        elseif key == '$'
+            intkey = 14
+        elseif key == '%'
+            intkey = 15
+        elseif key == '^'
+            intkey = 16
+        elseif key == '&'
+            intkey = 17
+        elseif key == '*'
+            intkey = 18
+        elseif key == '('
+            intkey = 19
+        else
+            intkey = try
+                parse(Int, key)
+            catch err
+                nothing
+            end
         end
         if key == 'q'
             # terminate vehicle 
             @info "Shutting down server."
             shutdown!(shutdown_channel)
             break
-        elseif key == '0' || (!isnothing(intkey) && intkey > max_vehicles)
+        elseif key == '0' || (!isnothing(intkey) && mod(intkey,10) > max_vehicles)
             @info "Switching to server view"
             take!(watch_channel)
             put!(watch_channel, 0)
-        elseif key == '1'
-            @info "Switching view to vehicle 1"
+        elseif key ∈ ['!','@','#','$','%','^','&','*','(']
+            @info "Switching view to vehicle $(mod(intkey, 10)) (top-down)"
             take!(watch_channel)
-            put!(watch_channel, 1)
-        elseif key == '2'
-            @info "Switching view to vehicle 2"
+            put!(watch_channel, intkey)
+        elseif key ∈ ['1','2','3','4','5','6','7','8','9']
+            @info "Switching view to vehicle $intkey (follow-cam)"
             take!(watch_channel)
-            put!(watch_channel, 2)
-        elseif key == '3'
-            @info "Switching view to vehicle 3"
-            take!(watch_channel)
-            put!(watch_channel, 3)
-        elseif key == '4'
-            @info "Switching view to vehicle 4"
-            take!(watch_channel)
-            put!(watch_channel, 4)
-        elseif key == '5'
-            @info "Switching view to vehicle 5"
-            take!(watch_channel)
-            put!(watch_channel, 5)
-        elseif key == '6'
-            @info "Switching view to vehicle 6"
-            take!(watch_channel)
-            put!(watch_channel, 6)
-        elseif key == '7'
-            @info "Switching view to vehicle 7"
-            take!(watch_channel)
-            put!(watch_channel, 7)
+            put!(watch_channel, intkey)
         else
             @info "Unrecognized command, try again."
         end

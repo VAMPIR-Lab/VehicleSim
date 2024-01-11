@@ -108,12 +108,16 @@ function visualize_vehicles(vehicles, state_channels, shutdown_channel, watch_ch
                             follow_dist=35.0,
                             follow_height=6.0,
                             follow_offset=6.0)
+    released = false
     while true
         sleep(0.001)
         if isready(shutdown_channel)
             fetch(shutdown_channel) && break
         end
-        vehicle_to_watch = fetch(watch_channel)
+        watch_key = fetch(watch_channel)
+        vehicle_to_watch = mod(watch_key, 10)
+        style_to_watch = div(watch_key, 10, RoundDown)
+
         if vehicle_to_watch == 0 || vehicle_to_watch ∉ keys(state_channels)
             state_to_watch = nothing
         else
@@ -136,18 +140,23 @@ function visualize_vehicles(vehicles, state_channels, shutdown_channel, watch_ch
                 pose = config[5:7]
                 yaw = extract_yaw_from_quaternion(quat) 
 
-                offset = [follow_dist * [cos(yaw), sin(yaw)]; -follow_height] +
-                         follow_offset * [sin(yaw), -cos(yaw), 0]
-
+                if style_to_watch == 0
+                    offset = [follow_dist * [cos(yaw), sin(yaw)]; -follow_height] +
+                             follow_offset * [sin(yaw), -cos(yaw), 0]
+                elseif style_to_watch == 1
+                    offset = [0.0, 0.0, -50.0]
+                end
                 setcameratarget!(vis, pose)
                 setcameraposition!(vis, pose-offset)
                 path = "/Cameras/default/rotated/<object>"
                 setprop!(vis[path], "zoom", 1.0)
-            elseif vehicle_to_watch == 0
+                released = false
+            elseif vehicle_to_watch == 0 && !released
                 setcameratarget!(vis, [0.0,0,0])
                 setcameraposition!(vis, [0,0,95.0])
                 path = "/Cameras/default/rotated/<object>"
                 setprop!(vis[path], "zoom", 0.5)
+                released = true
             end
         end
     end
