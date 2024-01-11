@@ -1,11 +1,9 @@
 function get_vis(map=nothing, open_vis=true, host::IPAddr = ip"127.0.0.1", default_port=8700)
     #vis = @suppress Visualizer(MeshCat.CoreVisualizer(host, default_port), ["meshcat"])
     vis = Visualizer(MeshCat.CoreVisualizer(host, default_port), ["meshcat"])
-    if !isnothing(map)
-        view_map(vis, map)
-    end
-    remove_grid!(vis)
+    !isnothing(map) && view_map(vis, map)
     open_vis && open(vis)
+    remove_grid!(vis)
     return vis
 end
 
@@ -23,8 +21,7 @@ end
 function remove_grid!(vis)
     delete!(vis["/Grid"])
     delete!(vis["/Axes"])
-    setcameratarget!(vis, [0,0,0])
-    setcameraposition!(vis, [0, -3, 1])
+    vis
 end
 
 function configure_car!(mvis, state, joints, config)
@@ -117,7 +114,11 @@ function visualize_vehicles(vehicles, state_channels, shutdown_channel, watch_ch
             fetch(shutdown_channel) && break
         end
         vehicle_to_watch = fetch(watch_channel)
-        state_to_watch =  vehicle_to_watch == 0 ? nothing : fetch(state_channels[vehicle_to_watch])
+        if vehicle_to_watch == 0 || vehicle_to_watch ∉ keys(state_channels)
+            state_to_watch = nothing
+        else
+            state_to_watch = fetch(state_channels[vehicle_to_watch])
+        end
         all_vis = [mvis.visualizer for mvis in vehicles[1].mviss]
         for i in keys(vehicles)
             mviss = vehicles[i].mviss

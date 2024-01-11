@@ -1,4 +1,3 @@
-
 struct EndOfSimException <: Exception end
 struct EndOfVehicleException <: Exception end
 
@@ -35,10 +34,10 @@ function server(max_vehicles=1,
         port=4444; 
         full_state=true, 
         rng=MersenneTwister(1), 
-        measure_gps=true, 
-        measure_imu=true, 
-        measure_cam=true, 
-        measure_gt=true)
+        measure_gps=false, 
+        measure_imu=false, 
+        measure_cam=false, 
+        measure_gt=false)
     host = getipaddr()
     map = training_map()
     server_visualizer = get_vis(map, true, host)
@@ -180,19 +179,25 @@ function server(max_vehicles=1,
             end
         end
     end)
-    update_viewer(watch_channel, shutdown_channel)
+    update_viewer(watch_channel, shutdown_channel, max_vehicles)
 end
 
-function update_viewer(watch_channel, shutdown_channel)
+function update_viewer(watch_channel, shutdown_channel, max_vehicles)
+    @info "Press 'q' to shutdown server. Press a number 1-$max_vehicles to view the follow-cam for the associated vehicle. Press '0' to switch to bird's-eye view."
     while true
         sleep(0.1)
         key = get_c()
+        intkey = try
+            parse(Int, key)
+        catch err
+            nothing
+        end
         if key == 'q'
             # terminate vehicle 
             @info "Shutting down server."
             shutdown!(shutdown_channel)
             break
-        elseif key == '0'
+        elseif key == '0' || (!isnothing(intkey) && intkey > max_vehicles)
             @info "Switching to server view"
             take!(watch_channel)
             put!(watch_channel, 0)
