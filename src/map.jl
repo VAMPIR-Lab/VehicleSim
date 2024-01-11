@@ -324,7 +324,8 @@ function get_initialization_point(seg)
     curved = !isapprox(curvature, 0.0; atol=1e-6)
     delta = pt_b-pt_a
     if !curved
-        pt = 0.25*(pt_a+pt_b+pt_c+pt_d)
+        #pt = 0.25*(pt_a+pt_b+pt_c+pt_d)
+        pt = 0.9*0.5*(pt_a+pt_c) + 0.1*0.5*(pt_b+pt_d)
         yaw = atan(delta[2], delta[1])
     else
         rad = 1.0 / abs(curvature)
@@ -418,7 +419,7 @@ function training_map(; lane_width = 30.0,
     single_shortened_block_length = block_length - (turn_r-int_r)
 
     all_segs = Dict{Int, RoadSegment}()
-    segs = add_straight_segments!(all_segs, nothing, north; length=block_length, speed_limit, stop_outbound=true, lane_width)
+    segs = add_straight_segments!(all_segs, nothing, north; length=block_length, speed_limit, stop_outbound=false, lane_width)
 
     #segs_I = add_fourway_intersection!(all_segs, nothing, nothing; intersection_curvature, speed_limit, lane_width)
     #segs = add_straight_segments!(all_segs, segs_I, west; length=block_length, speed_limit, stop_outbound=true, stop_inbound=true)
