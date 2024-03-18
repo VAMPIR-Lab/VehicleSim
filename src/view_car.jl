@@ -164,7 +164,7 @@ end
 
 function view_car(vis; max_realtime_rate=1.0)
     delete!(vis)
-    urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
+    urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy_nomesh.urdf")
     chevy = parse_urdf(urdf_path, floating=true)
     
     configure_contact_points!(chevy)

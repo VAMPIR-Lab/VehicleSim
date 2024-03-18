@@ -47,7 +47,17 @@ function keyboard_client(host::IPAddr=IPv4(0), port=4444; v_step = 1.0, s_step =
     target_velocity = 0.0
     steering_angle = 0.0
     controlled = true
-    @info "Press 'q' at any time to terminate vehicle."
+    
+    client_info_string = 
+        "********************
+      Keyboard Control (manual mode)
+      ********************
+        -Press 'q' at any time to terminate vehicle.
+        -Press 'i' to increase vehicle speed.
+        -Press 'k' to decrease vehicle speed.
+        -Press 'j' to increase steering angle (turn left).
+        -Press 'l' to decrease steering angle (turn right)."
+    @info client_info_string
     while controlled && isopen(socket)
         key = get_c()
         if key == 'q'

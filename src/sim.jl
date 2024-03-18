@@ -23,8 +23,12 @@ function vehicle_simulate(state::MechanismState{X}, mviss, vehicle_id, final_tim
     RigidBodyDynamics.integrate(integrator, final_time, Δt; max_realtime_rate)
 end
 
-function load_mechanism()
-    urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
+function load_mechanism(; no_mesh=false)
+    if no_mesh
+        urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy_nomesh.urdf")
+    else
+        urdf_path = joinpath(dirname(pathof(VehicleSim)), "assets", "chevy.urdf")
+    end
     chevy_base = parse_urdf(urdf_path, floating=true)
     chevy_joints = joints(chevy_base)
     (; urdf_path, chevy_base, chevy_joints)
@@ -33,6 +37,7 @@ end
 function server(max_vehicles=1, 
         port=4444; 
         full_state=true, 
+        no_mesh=false,
         map_type=:city,
         rng=MersenneTwister(1), 
         measure_gps=false, 
@@ -52,7 +57,8 @@ function server(max_vehicles=1,
       CONNECTING TO SERVER
       ********************
         -Connect a keyboard client by running (in a new REPL):
-            using Vehicle Sim, Sockets; keyboard_client(ip\"$host\")
+            using VehicleSim, Sockets
+            keyboard_client(ip\"$host\");
         -Port for manual clients is $port"
     @info server_info_string
     #@info inform_hostport(server_visualizer, "Server visualizer")
@@ -60,7 +66,7 @@ function server(max_vehicles=1,
     #all_visualizers = [client_visualizers; server_visualizer]
     all_visualizers = [server_visualizer,]
 
-    (; urdf_path, chevy_base, chevy_joints) = load_mechanism()
+    (; urdf_path, chevy_base, chevy_joints) = load_mechanism(; no_mesh)
     chevy_visuals = URDFVisuals(urdf_path, package_path=[dirname(pathof(VehicleSim))])
 
     viable_segments = Set(keys(map))
@@ -97,17 +103,17 @@ function server(max_vehicles=1,
         vehicles[vehicle_id] = vehicle
     end
 
-    errormonitor(@async visualize_vehicles(vehicles, state_channels, shutdown_channel, watch_channel))
+    @async visualize_vehicles(vehicles, state_channels, shutdown_channel, watch_channel)
 
-    measure_vehicles(map, 
-                     vehicles, 
-                     state_channels, 
-                     meas_channels, 
-                     shutdown_channel; 
-                     rng, 
-                     measure_gps, 
-                     measure_imu, 
-                     measure_cam, 
+    measure_vehicles(map,
+                     vehicles,
+                     state_channels,
+                     meas_channels,
+                     shutdown_channel;
+                     rng,
+                     measure_gps,
+                     measure_imu,
+                     measure_cam,
                      measure_gt)
 
     client_connections = [false for _ in 1:max_vehicles]

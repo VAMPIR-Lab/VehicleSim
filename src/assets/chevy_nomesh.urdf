@@ -1,0 +1,319 @@
+<?xml version="1.0"?>
+
+<robot name="Chevy">
+
+    <!--   LINKS   -->
+
+    <link name="body">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <mass value="1000" />
+            <!-- TODO Calculate this correclty. And for lower COM"-->
+            <inertia ixx="4166.67" ixy="0" ixz="0" iyy="10416.67" iyz="0" izz="10416.67" />
+        </inertial>
+        <visual>
+            <origin xyz="0.5 0 0.05" rpy="0 0 0" />
+            <geometry>
+                <box size="11.0 5.0 4.0" />
+            </geometry>
+            <material name="blue">
+                <color rgba="0.2 0.2 1.0 1"/>
+            </material>
+        </visual>
+        <collision name="body_bounding_box">
+            <origin xyz="0 0 0.05" rpy="0 0 0" />
+            <geometry>
+                <box size="13.2 5.7 5.3" />
+            </geometry>
+        </collision>
+    </link>
+
+    <link name="camera_1">
+        <visual>
+            <geometry>
+                <box size="0.4 0.25 0.25"/>
+            </geometry>
+            <material name="red">
+                <color rgba="1.0 0.2 0.2 1"/>
+            </material>
+        </visual>
+    </link>
+    
+    <link name="camera_2">
+        <visual>
+            <geometry>
+                <box size="0.4 0.25 0.25"/>
+            </geometry>
+            <material name="red">
+                <color rgba="1.0 0.2 0.2 1"/>
+            </material>
+        </visual>
+    </link>
+    
+    <link name="gps">
+        <visual>
+            <geometry>
+                <cylinder radius="0.1" length="0.5"/>
+            </geometry>
+            <material name="red">
+                <color rgba="1.0 0.2 0.2 1"/>
+            </material>
+        </visual>
+    </link>
+    
+    <link name="imu">
+        <visual>
+            <geometry>
+                <box size="0.5 0.5 0.2"/>
+            </geometry>
+            <material name="red">
+                <color rgba="1.0 0.2 0.2 1"/>
+            </material>
+        </visual>
+    </link>
+
+    <link name="front_axle_mount"/>
+
+    <link name="front_axle">
+        <visual>
+            <geometry>
+                <cylinder radius="0.25" length="4.6"/>
+            </geometry>
+            <material name="grey">
+                <color rgba="0.3 0.3 0.3 1"/>
+            </material>
+        </visual>
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="8.0"/>
+            <!--inertia ixx=iyy=1/12 * m * ( 3r^2 + h^2) izz=1/2*m*r^2     -->
+            <inertia ixx="14.2316666667" iyy="14.2316666667" ixy="0.0" ixz="0.0" izz="0.25" iyz="0.0"/>
+        </inertial>
+    </link>
+    
+    <link name="rear_axle_mount"/>
+
+    <link name="rear_axle">
+        <visual>
+            <geometry>
+                <cylinder radius="0.25" length="5.0"/>
+            </geometry>
+            <material name="grey">
+                <color rgba="0.3 0.3 0.3 1"/>
+            </material>
+        </visual>
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="10.0"/>
+            <!--inertia ixx=iyy=1/12 * m * ( 3r^2 + h^2) izz=1/2*m*r^2     -->
+            <inertia ixx="20.9895833333" iyy="20.9895833333" ixy="0.0" ixz="0.0" izz="0.3125" iyz="0.0"/>
+        </inertial>
+    </link>
+
+    <link name="front_left_steering_linkage">
+        <visual>
+            <geometry>
+                <cylinder radius="0.25" length="0.2"/>
+            </geometry>
+            <material name="grey">
+                <color rgba="0.3 0.3 0.3 1"/>
+            </material>
+        </visual>
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="1.0"/>
+            <!--inertia ixx=iyy=1/12 * m * ( 3r^2 + h^2) izz=1/2*m*r^2     -->
+            <inertia ixx="0.01895833333" iyy="0.01895833333" ixy="0.0" ixz="0.0" izz="0.02" iyz="0.0"/>
+        </inertial>
+    </link>
+    <link name="front_right_steering_linkage">
+        <visual>
+            <geometry>
+                <cylinder radius="0.25" length="0.2"/>
+            </geometry>
+            <material name="grey">
+                <color rgba="0.3 0.3 0.3 1"/>
+            </material>
+        </visual>
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="1.0"/>
+            <!--inertia ixx=iyy=1/12 * m * ( 3r^2 + h^2) izz=1/2*m*r^2     -->
+            <inertia ixx="0.01895833333" iyy="0.01895833333" ixy="0.0" ixz="0.0" izz="0.02" iyz="0.0"/>
+        </inertial>
+    </link>
+
+    <link name="wheel_front_left">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <mass value="30" />
+            <inertia ixx="10.4812" ixy="0" ixz="0" iyy="10.48125" iyz="0" izz="18.15" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <cylinder length="0.75" radius="1.1" />
+            </geometry>
+            <material name="black">
+                <color rgba="0.2 0.2 0.21 1" />
+            </material>
+        </visual>
+    </link>
+
+    <link name="wheel_front_right">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <mass value="30" />
+            <inertia ixx="10.4812" ixy="0" ixz="0" iyy="10.48125" iyz="0" izz="18.15" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <cylinder length="0.75" radius="1.1" />
+            </geometry>
+            <material name="black">
+                <color rgba="0.2 0.2 0.21 1" />
+            </material>
+        </visual>
+    </link>
+
+    <link name="wheel_rear_left">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <mass value="30" />
+            <inertia ixx="10.4812" ixy="0" ixz="0" iyy="10.48125" iyz="0" izz="18.15" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <cylinder length="0.75" radius="1.1" />
+            </geometry>
+            <material name="black">
+                <color rgba="0.2 0.2 0.21 1" />
+            </material>
+        </visual>
+    </link>
+
+    <link name="wheel_rear_right">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <mass value="30" />
+            <inertia ixx="10.4812" ixy="0" ixz="0" iyy="10.48125" iyz="0" izz="18.15" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <cylinder length="0.75" radius="1.1" />
+            </geometry>
+            <material name="black">
+                <color rgba="0.2 0.2 0.21 1" />
+            </material>
+        </visual>
+    </link>
+
+    <!--   JOINTS  -->
+
+    <!--joint name="world_to_road" type="fixed">
+        <parent link="world" />
+        <child link="road" />
+        <origin xyz="0 -150 0" rpy="1.57 0 0"/>
+    </joint-->
+    
+    <joint name="body_to_camera_1" type="fixed">
+        <parent link="body"/>
+        <child link="camera_1"/>
+        <origin xyz="1.35 1.7 2.4" rpy="0 0.02 0"/>
+    </joint>
+    
+    <joint name="body_to_camera_2" type="fixed">
+        <parent link="body"/>
+        <child link="camera_2"/>
+        <origin xyz="1.35 -1.7 2.4" rpy="0 0.02 0"/>
+    </joint>
+    
+    <joint name="body_to_gps" type="fixed">
+        <parent link="body"/>
+        <child link="gps"/>
+        <origin xyz="-3.0 1.0 2.6" rpy="0 0 0"/>
+    </joint>
+    
+    <joint name="body_to_imu" type="fixed">
+        <parent link="body"/>
+        <child link="imu"/>
+        <origin xyz="0 0 0.7" rpy="0 0.02 0"/>
+    </joint>
+    
+    <joint name="body_to_front_axle_mount" type="prismatic">
+        <parent link="body"/>
+        <child link="front_axle_mount"/>
+        <origin xyz="4.25 0 -2.25" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+
+    <joint name="body_to_rear_axle_mount" type="prismatic">
+        <parent link="body"/>
+        <child link="rear_axle_mount"/>
+        <origin xyz="-3.5 0 -2.35" rpy="0 0 0"/>
+        <axis xyz="0 0 1.0"/>
+    </joint>
+
+    <joint name="mount_to_front_axle" type="revolute">
+        <parent link="front_axle_mount"/>
+        <child link="front_axle"/>
+        <origin xyz="0 0 0" rpy="1.57 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-0.4" upper="0.4"/>
+    </joint>
+
+    <joint name="mount_to_rear_axle" type="revolute">
+        <parent link="rear_axle_mount"/>
+        <child link="rear_axle"/>
+        <origin xyz="0 0 0" rpy="1.57 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-0.4" upper="0.4"/>
+    </joint>
+    
+    <joint name="front_axle_to_left_linkage" type="revolute">
+        <parent link="front_axle"/>
+        <child link="front_left_steering_linkage"/>
+        <origin xyz="0 0 2.3" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-0.6" upper="0.6"/>
+    </joint>
+
+    <joint name="front_axle_to_right_linkage" type="revolute">
+        <parent link="front_axle"/>
+        <child link="front_right_steering_linkage"/>
+        <origin xyz="0 0 -2.3" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-0.6" upper="0.6"/>
+    </joint>
+
+    <joint name="front_linkage_to_left_wheel" type="continuous">
+        <parent link="front_left_steering_linkage" />
+        <child link="wheel_front_left" />
+        <origin xyz="0 0 0.2" rpy="0 0 0"/>
+        <axis xyz="0 0 1" />
+    </joint>
+
+    <joint name="front_linkage_to_right_wheel" type="continuous">
+        <parent link="front_right_steering_linkage" />
+        <child link="wheel_front_right" />
+        <origin xyz="0 0 -0.2" rpy="0 0 0"/>
+        <axis xyz="0 0 1" />
+    </joint>
+
+    <joint name="rear_axle_to_left_wheel" type="continuous">
+        <parent link="rear_axle" />
+        <child link="wheel_rear_left" />
+        <origin xyz="0 0 2.5" rpy="0 0 0"/>
+        <axis xyz="0 0 1" />
+    </joint>
+
+    <joint name="rear_axle_to_right_wheel" type="continuous">
+        <parent link="rear_axle" />
+        <child link="wheel_rear_right" />
+        <origin xyz="0 0 -2.5" rpy="0 0 0"/>
+        <axis xyz="0 0 1" />
+    </joint>
+</robot>
