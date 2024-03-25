@@ -41,7 +41,7 @@ function keyboard_client(host::IPAddr=IPv4(0), port=4444; v_step = 1.0, s_step =
                 num_gps += 1
             end
         end
-  #      @info "Measurements received: $num_gt gt; $num_cam cam; $num_imu imu; $num_gps gps"
+        @info "Measurements received: $num_gt gt; $num_cam cam; $num_imu imu; $num_gps gps"
     end
     
     target_velocity = 0.0
@@ -83,7 +83,7 @@ function keyboard_client(host::IPAddr=IPv4(0), port=4444; v_step = 1.0, s_step =
             steering_angle -= s_step
             @info "Target steering angle: $steering_angle"
         end
-        cmd = VehicleCommand(steering_angle, target_velocity, controlled)
+        cmd = (steering_angle, target_velocity, controlled)
         serialize(socket, cmd)
     end
 end
@@ -106,7 +106,7 @@ function example_client(host::IPAddr=IPv4(0), port=4444)
             shutdown = true
             persist = false
         end
-        cmd = VehicleCommand(0.0, 2.5, persist, shutdown)
+        cmd = (0.0, 2.5, persist, shutdown)
         serialize(socket, cmd) 
     end
 

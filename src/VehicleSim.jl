@@ -26,6 +26,6 @@ include("measurements.jl")
 include("map.jl")
 include("example_project.jl")
 
-export server, shutdown!, keyboard_client, GroundTruthMeasurement, CameraMeasurement, IMUMeasurement, GPSMeasurement, VehicleCommand, training_map, load_mechanism
+export server, shutdown!, keyboard_client, GroundTruthMeasurement, CameraMeasurement, IMUMeasurement, GPSMeasurement, VehicleCommand, training_map, load_mechanism, MeasurementMessage
 
 end

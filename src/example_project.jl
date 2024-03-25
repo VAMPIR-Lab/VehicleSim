@@ -66,7 +66,7 @@ function decision_making(localization_state_channel,
         # figure out what to do ... setup motion planning problem etc
         steering_angle = 0.0
         target_vel = 0.0
-        cmd = VehicleCommand(steering_angle, target_vel, true)
+        cmd = (steering_angle, target_vel, true)
         serialize(socket, cmd)
     end
 end
@@ -78,7 +78,7 @@ end
 
 function my_client(host::IPAddr=IPv4(0), port=4444)
     socket = Sockets.connect(host, port)
-    map_segments = VehicleSim.training_map()
+    map_segments = VehicleSim.city_map()
     
     msg = deserialize(socket) # Visualization info
     @info msg

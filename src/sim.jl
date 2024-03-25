@@ -168,17 +168,20 @@ function server(max_vehicles=1,
                                         break
                                     end
                                 end
-                                car_cmd = deserialize(sock)
+                                raw_cmd = deserialize(sock)
                                 received = true
 
                                 !received && continue
+                                car_cmd =  VehicleCommand(raw_cmd...)
                                 put!(cmd_channels[vehicle_id], car_cmd)
                                 if !car_cmd.controlled
                                     close(sock)
                                end
                             end
                         catch e
-                            @warn "Error receiving command for vehicle $vehicle_id. Did client fail?"
+                            @warn e
+                            @warn "Error receiving command for vehicle $vehicle_id. Client may have failed. Closing socket connection to client."
+                            close(sock)
                         end
                     end
                     @async begin
