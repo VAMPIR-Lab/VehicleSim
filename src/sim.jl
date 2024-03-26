@@ -54,7 +54,7 @@ function server(max_vehicles=1,
     server_visualizer = get_vis(map, true, host)
     server_info_string = 
         "********************
-      CONNECTING TO SERVER. V2
+      CONNECTING TO SERVER. V3
       ********************
         -Connect a keyboard client by running (in a new REPL):
             using VehicleSim, Sockets
