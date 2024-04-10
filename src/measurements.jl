@@ -363,7 +363,7 @@ function convert_to_pixel(num_pixels, pixel_len, px)
     return pix_id
 end
 
-function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_len = 0.32, pixel_len = 0.001, image_width = 640, image_height = 480)
+function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_len = 0.64, pixel_len = 0.001, image_width = 640, image_height = 480)
     min_Δ = 1.0/max_rate
     t = time()
     num_vehicles = length(vehicles)
