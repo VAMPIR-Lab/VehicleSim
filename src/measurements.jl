@@ -398,9 +398,9 @@ function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_le
                         other_vehicle_corners = [transform * [pt;1] for pt in corners_body[j]]
                         visible = false
 
-                        left = image_width
+                        left = image_width+1
                         right = 0
-                        top = image_height
+                        top = image_height+1
                         bot = 0
 
                         for corner in other_vehicle_corners
@@ -416,14 +416,15 @@ function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_le
                             top = min(top, py)
                             bot = max(bot, py)
                         end
-                        if top ≈ bot || left ≈ right || top > bot || left > right
+                        if left>image_width || top>image_height || right < 1 || bot < 1
                             # out of frame
                             continue
                         else 
-                            #top = convert_to_pixel(image_height, pixel_len, top)
-                            #bot = convert_to_pixel(image_height, pixel_len, bot)
-                            #left = convert_to_pixel(image_width, pixel_len, left)
-                            #right = convert_to_pixel(image_width, pixel_len, right)
+                            # project extents into frame
+                            top = max(top, 1)
+                            left = max(left, 1)
+                            bot = min(bot, image_height)
+                            right = min(right, image_width)
                             push!(bboxes, SVector(top, left, bot, right))
                         end
                     end
