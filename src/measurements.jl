@@ -398,10 +398,10 @@ function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_le
                         other_vehicle_corners = [transform * [pt;1] for pt in corners_body[j]]
                         visible = false
 
-                        left = image_width/2
-                        right = -image_width/2
-                        top = image_height/2
-                        bot = -image_height/2
+                        left = image_width
+                        right = 0
+                        top = image_height
+                        bot = 0
 
                         for corner in other_vehicle_corners
                             if corner[3] < focal_len
