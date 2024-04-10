@@ -409,6 +409,8 @@ function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_le
                             end
                             px = focal_len*corner[1]/corner[3]
                             py = focal_len*corner[2]/corner[3]
+                            px = convert_to_pixel(image_height, pixel_len, px)
+                            py = convert_to_pixel(image_height, pixel_len, py)
                             left = min(left, px)
                             right = max(right, px)
                             top = min(top, py)
@@ -418,10 +420,10 @@ function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_le
                             # out of frame
                             continue
                         else 
-                            top = convert_to_pixel(image_height, pixel_len, top)
-                            bot = convert_to_pixel(image_height, pixel_len, bot)
-                            left = convert_to_pixel(image_width, pixel_len, left)
-                            right = convert_to_pixel(image_width, pixel_len, right)
+                            #top = convert_to_pixel(image_height, pixel_len, top)
+                            #bot = convert_to_pixel(image_height, pixel_len, bot)
+                            #left = convert_to_pixel(image_width, pixel_len, left)
+                            #right = convert_to_pixel(image_width, pixel_len, right)
                             push!(bboxes, SVector(top, left, bot, right))
                         end
                     end
