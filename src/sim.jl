@@ -36,7 +36,8 @@ end
 
 function server(max_vehicles=1, 
         port=4444; 
-        full_state=true, 
+        full_state=true,
+        open_vis=true,
         no_mesh=false,
         map_type=:city,
         rng=MersenneTwister(1), 
@@ -51,7 +52,7 @@ function server(max_vehicles=1,
         @assert max_vehicles==1
         map = training_map()
     end
-    server_visualizer = get_vis(map, true, host)
+    server_visualizer = get_vis(map, open_vis, host)
     server_info_string = 
         "********************
       CONNECTING TO SERVER. V3
