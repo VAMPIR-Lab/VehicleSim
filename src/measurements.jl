@@ -375,6 +375,9 @@ function cameras(vehicles, state_channels, cam_channels; max_rate=10.0, focal_le
 
     T_body_camrot1 = multiply_transforms(T_body_cam1, T_cam_camrot)
     T_body_camrot2 = multiply_transforms(T_body_cam2, T_cam_camrot)
+    
+    loop_count = 0
+    last_time = t
 
     while true
         sleep(0.0001)
@@ -496,6 +499,7 @@ function measure_vehicles(map,
         vehicles, 
         state_channels, 
         meas_channels, 
+        info_channel,
         shutdown_channel;
         measure_gps = true,
         measure_imu = true,
@@ -515,6 +519,7 @@ function measure_vehicles(map,
     cam_channels = [Channel{CameraMeasurement}(32) for _ in 1:num_vehicles]
     gt_channels = [Channel{GroundTruthMeasurement}(32) for _ in 1:num_vehicles]
     target_channels = [Channel{Int}(1) for _ in 1:num_vehicles]
+    frequency_channel = Channel{Any}(32)
     
     shutdown = false
     @async while true
@@ -525,6 +530,7 @@ function measure_vehicles(map,
                 foreach(c->totalshutdown(c), values(meas_channels))
                 foreach(c->totalshutdown(c), values(state_channels))
                 foreach(c->totalshutdown(c), target_channels)
+                totalshutdown(frequency_channel)
                 break
             end
         end
@@ -556,18 +562,27 @@ function measure_vehicles(map,
                 gt_measurements = GroundTruthMeasurement[]
                 meas_lists = (gps_measurements, imu_measurements, cam_measurements, gt_measurements)
                 channels = (gps_channels[id], imu_channels[id], cam_channels[id], gt_channels[id])
+                ch_names = ("gps", "imu", "cam", "gt")
+                t = time()
+                loop_count = 0
+                meas_counts = Dict(name=>0 for name in ch_names)
+                send_count = 0
                 while true
                     sleep(0.0001)
-                    for (channel, meas_list) in zip(channels, meas_lists)
+                    loop_count += 1
+                    for (channel, meas_list, ch_name) in zip(channels, meas_lists, ch_names)
                         while isready(channel)
                             msg = take!(channel)
                             push!(meas_list, msg)
+                            meas_counts[ch_name] += 1
                         end
                     end
+                    
                     if isempty(meas_channels[id]) && !all(isempty.(meas_lists))
                         target = fetch(target_channels[id])
                         msg = MeasurementMessage(id, target, vcat(meas_lists...))
                         put!(meas_channels[id], msg)
+                        send_count += 1
                         for meas_list in meas_lists
                             deleteat!(meas_list, 1:length(meas_list))
                         end
@@ -578,8 +593,20 @@ function measure_vehicles(map,
                             deleteat!(meas_list, 1:L)
                         end
                     end 
+                    if loop_count == 300
+                        td = time() - t
+                        freq_info = (; msg_type = "freq",  id=id, gps = meas_counts["gps"] / td, imu = meas_counts["imu"] / td, cam = meas_counts["cam"] / (2*td), gt = meas_counts["gt"] / (num_vehicles*td), sent = send_count / td)
+                        put!(info_channel, freq_info)
+                        loop_count = 0
+                        t += td
+                        for k in keys(meas_counts)
+                            meas_counts[k] = 0
+                        end
+                        send_count = 0
+                    end
                 end
             end
         end
     end
+
 end

@@ -34,6 +34,62 @@ function load_mechanism(; no_mesh=false)
     (; urdf_path, chevy_base, chevy_joints)
 end
 
+function logger(info_channel, shutdown_channel, num_vehicles)
+    sleep(1.0)
+    frequencies = Dict(id => Dict("gps"=>0.0, "imu" => 0.0, "cam" => 0.0, "gt"=>0.0, "sent" => 0.0) for id in 1:num_vehicles)
+    foreach(i->println(), 1:num_vehicles+3)
+
+    sim_view_str = ""
+    sim_info_str = ""
+
+    vehicles_connected = [false for i in 1:num_vehicles]
+    vehicle_connection_str = "Vehicles connected: "
+    for i in 1:num_vehicles
+        vehicle_connection_str *= "$i : $(vehicles_connected[i]). "
+    end
+    
+    while true
+        if isready(shutdown_channel)
+            break
+        end
+        sleep(0.001)
+        while isready(info_channel)
+            meas = take!(info_channel)
+            if meas.msg_type == "freq"
+                frequencies[meas.id]["gps"] = meas.gps
+                frequencies[meas.id]["imu"] = meas.imu
+                frequencies[meas.id]["cam"] = meas.cam
+                frequencies[meas.id]["gt"] = meas.gt
+                frequencies[meas.id]["sent"] = meas.sent
+            elseif meas.msg_type == "sim_status"
+                sim_info_str = meas.str
+            elseif meas.msg_type == "connection_status"
+                vehicles_connected[meas.id] = meas.status
+                vehicle_connection_str = "Vehicles connected: "
+                for i in 1:num_vehicles
+                    vehicle_connection_str *= "$i : $(vehicles_connected[i]). "
+                end
+            elseif meas.msg_type == "view_status"
+                sim_view_str = meas.str
+            end
+        end
+        str = repeat("\033[F", num_vehicles+3)
+        print(str)
+        for i in 1:num_vehicles
+            gps = frequencies[i]["gps"]
+            imu = frequencies[i]["imu"]
+            cam = frequencies[i]["cam"]
+            gt = frequencies[i]["gt"]
+            sent = frequencies[i]["sent"]
+            @printf("Vehicle %i: gps freq: %6.3f, imu freq: %6.3f, cam freq: %6.3f, gt freq: %6.3f, send freq: %6.3f \n", i, gps, imu, cam, gt, sent)
+        end
+        @printf("%s \n", sim_info_str)
+        @printf("%s \n", vehicle_connection_str)
+        @printf("%s \n", sim_view_str)
+        flush(stdout)
+    end
+end
+
 function server(max_vehicles=1, 
         port=4444; 
         full_state=true,
@@ -44,7 +100,10 @@ function server(max_vehicles=1,
         measure_gps=false, 
         measure_imu=false, 
         measure_cam=false, 
-        measure_gt=false)
+        measure_gt=false,
+        measure_all=false,
+        monitor_rates=true)
+
     host = getipaddr()
     if map_type == :city
         map = city_map()
@@ -79,6 +138,7 @@ function server(max_vehicles=1,
     meas_channels = Dict(id=>Channel{MeasurementMessage}(1) for id in 1:max_vehicles)
     watch_channel = Channel{Int}(1)
     shutdown_channel = Channel{Bool}(1)
+    info_channel = Channel{Any}(32)
     put!(watch_channel, 0)
 
     for vehicle_id in 1:max_vehicles
@@ -106,16 +166,24 @@ function server(max_vehicles=1,
 
     @async visualize_vehicles(vehicles, state_channels, shutdown_channel, watch_channel)
 
+    measure_gps |= measure_all
+    measure_imu |= measure_all
+    measure_cam |= measure_all
+    measure_gt |= measure_all
+
     measure_vehicles(map,
                      vehicles,
                      state_channels,
                      meas_channels,
+                     info_channel,
                      shutdown_channel;
                      rng,
                      measure_gps,
                      measure_imu,
                      measure_cam,
                      measure_gt)
+
+    print_line_offset = monitor_rates ? max_vehicles : 0
 
     client_connections = [false for _ in 1:max_vehicles]
 
@@ -127,7 +195,8 @@ function server(max_vehicles=1,
                 if isready(shutdown_channel)
                     shutdown = fetch(shutdown_channel)
                     if shutdown
-                        @info "Shutting down TCP server."
+                        put!(info_channel, (; msg_type="sim_status", str="Shutting down TCP server."))
+                        #@info "Shutting down TCP server."
                         close(server)
                         break
                     end
@@ -137,17 +206,17 @@ function server(max_vehicles=1,
         end
         while true
             try
-                @info "Waiting for client"
+                put!(info_channel, (; msg_type="sim_status", str="Waiting for client."))
                 sock = accept(server)
-                @info "Client accepted."
+                #put!(info_channel, (; msg_type="sim_status", str="Client accepted."))
                 client_count = mod1(client_count+1, max_vehicles)
+                put!(info_channel, (; msg_type="connection_status", id=client_count, status=true))
                 if client_connections[client_count]
-                    @error "Requested vehicle already in use!"
+                    put!(info_channel, (; msg_type="sim_status", str="ERROR! Requested vehicle already in use!"))
                     close(sock)
                     break
                 end
-                #serialize(sock, inform_hostport(client_visualizers[client_count], "Client follow-cam"))
-                serialize(sock, inform_hostport(all_visualizers[1], "Don't connect to this."))
+                serialize(sock, inform_hostport(all_visualizers[1], "Visualizer"))
                 let vehicle_id=client_count
                     @async begin
                         try
@@ -176,12 +245,12 @@ function server(max_vehicles=1,
                                 car_cmd =  VehicleCommand(raw_cmd...)
                                 put!(cmd_channels[vehicle_id], car_cmd)
                                 if !car_cmd.controlled
+                                    put!(info_channel, (; msg_type="connection_status", id=vehicle_id, status=false))
                                     close(sock)
                                end
                             end
                         catch e
-                            @warn e
-                            @warn "Error receiving command for vehicle $vehicle_id. Client may have failed. Closing socket connection to client."
+                            put!(info_channel, (; msg_type="sim_status", str="WARNING! Error receiving command for vehicle $vehicle_id. Client may have failed. Closing socket connection to client."))
                             close(sock)
                         end
                     end
@@ -198,7 +267,7 @@ function server(max_vehicles=1,
                                 end
                             end
                         catch e
-                            @warn "Error sending measurements to vehicle $vehicle_id. Did client fail?"
+                            put!(info_channel, (; msg_type="sim_status", str="WARNING! Error sending measurements to vehicle $vehicle_id. Did client fail?."))
                         end
                     end
                 end
@@ -207,10 +276,11 @@ function server(max_vehicles=1,
             end
         end
     end)
-    update_viewer(watch_channel, shutdown_channel, max_vehicles)
+    @async logger(info_channel, shutdown_channel, max_vehicles)
+    update_viewer(watch_channel, shutdown_channel, max_vehicles, info_channel)
 end
 
-function update_viewer(watch_channel, shutdown_channel, max_vehicles)
+function update_viewer(watch_channel, shutdown_channel, max_vehicles, info_channel)
     info_string = 
         "***************
       VIEWER COMMANDS
@@ -252,23 +322,23 @@ function update_viewer(watch_channel, shutdown_channel, max_vehicles)
         end
         if key == 'q'
             # terminate vehicle 
-            @info "Shutting down server."
+            put!(info_channel, (; msg_type="view_status", str="Shutting down server."))
             shutdown!(shutdown_channel)
             break
         elseif key == '0' || (!isnothing(intkey) && mod(intkey,10) > max_vehicles)
-            @info "Switching to server view"
+            put!(info_channel, (; msg_type="view_status", str="Switching to server view."))
             take!(watch_channel)
             put!(watch_channel, 0)
         elseif key ∈ ['!','@','#','$','%','^','&','*','(']
-            @info "Switching view to vehicle $(mod(intkey, 10)) (top-down)"
+            put!(info_channel, (; msg_type="view_status", str="Switching view to vehicle $(mod(intkey, 10)) (top-down)"))
             take!(watch_channel)
             put!(watch_channel, intkey)
         elseif key ∈ ['1','2','3','4','5','6','7','8','9']
-            @info "Switching view to vehicle $intkey (follow-cam)"
+            put!(info_channel, (; msg_type="view_status", str="Switching view to vehicle $intkey (follow-cam)"))
             take!(watch_channel)
             put!(watch_channel, intkey)
         else
-            @info "Unrecognized command, try again."
+            put!(info_channel, (; msg_type="view_status", str="Unrecognized command, try again."))
         end
     end
 end
