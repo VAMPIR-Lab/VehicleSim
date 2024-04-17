@@ -238,11 +238,8 @@ function server(max_vehicles=1,
                                         break
                                     end
                                 end
-                                #raw_cmd = deserialize(sock)
-                                #received = true
 
                                 !received && continue
-                                #car_cmd =  VehicleCommand(raw_cmd...)
                                 car_cmd =  VehicleCommand(car_cmd...)
                                 put!(cmd_channels[vehicle_id], car_cmd)
                                 if !car_cmd.controlled
