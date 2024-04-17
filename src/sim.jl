@@ -81,11 +81,11 @@ function logger(info_channel, shutdown_channel, num_vehicles)
             cam = frequencies[i]["cam"]
             gt = frequencies[i]["gt"]
             sent = frequencies[i]["sent"]
-            @printf("Vehicle %i: gps freq: %6.3f, imu freq: %6.3f, cam freq: %6.3f, gt freq: %6.3f, send freq: %6.3f \n", i, gps, imu, cam, gt, sent)
+            @printf("Vehicle %i: gps freq: %6.3f, imu freq: %6.3f, cam freq: %6.3f, gt freq: %6.3f, send freq: %6.3f \u1b[0K \n", i, gps, imu, cam, gt, sent)
         end
-        @printf("%s \n", sim_info_str)
-        @printf("%s \n", vehicle_connection_str)
-        @printf("%s \n", sim_view_str)
+        @printf("%s \u1b[0K \n", sim_info_str)
+        @printf("%s \u1b[0K \n", vehicle_connection_str)
+        @printf("%s \u1b[0K \n", sim_view_str)
         flush(stdout)
     end
 end
@@ -238,11 +238,12 @@ function server(max_vehicles=1,
                                         break
                                     end
                                 end
-                                raw_cmd = deserialize(sock)
-                                received = true
+                                #raw_cmd = deserialize(sock)
+                                #received = true
 
                                 !received && continue
-                                car_cmd =  VehicleCommand(raw_cmd...)
+                                #car_cmd =  VehicleCommand(raw_cmd...)
+                                car_cmd =  VehicleCommand(car_cmd...)
                                 put!(cmd_channels[vehicle_id], car_cmd)
                                 if !car_cmd.controlled
                                     put!(info_channel, (; msg_type="connection_status", id=vehicle_id, status=false))
