@@ -5,10 +5,10 @@ VehicleSim
 
 # Loading / instantiating code
 
-It is recommended to start julia with multiple threads, since many concurrent tasks will be executing. 
+It is recommended to start julia with multiple threads, since many concurrent tasks will be executing. Important: you must use julia 1.9.3 for all functionality to work properly. 
 
 ```
-julia --project --threads=auto
+julia +1.9.3 --project --threads=auto
 ```
 
 ```julia
