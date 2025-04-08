@@ -16,32 +16,46 @@ function get_c()
     c
 end
 
-function keyboard_client(host::IPAddr=IPv4(0), port=4444; v_step = 1.0, s_step = π/10)
+function keyboard_client(host::IPAddr=IPv4(0), port=4444; v_step = 1.0, s_step = π/10, collect_buffer=false)
     socket = Sockets.connect(host, port)
     (peer_host, peer_port) = getpeername(socket)
     msg = deserialize(socket) # Visualization info
     @info msg
 
-    @async while isopen(socket)
-        sleep(0.001)
-        state_msg = deserialize(socket)
-        measurements = state_msg.measurements
-        num_cam = 0
-        num_imu = 0
-        num_gps = 0
-        num_gt = 0
-        for meas in measurements
-            if meas isa GroundTruthMeasurement
-                num_gt += 1
-            elseif meas isa CameraMeasurement
-                num_cam += 1
-            elseif meas isa IMUMeasurement
-                num_imu += 1
-            elseif meas isa GPSMeasurement
-                num_gps += 1
+    errormonitor(@async begin
+        msg_buf = []
+        while isopen(socket)
+            sleep(0.001)
+            local state_msg
+            try
+                state_msg = deserialize(socket)
+            catch err
+                break
+            end
+            push!(msg_buf, state_msg)
+            measurements = state_msg.measurements
+            num_cam = 0
+            num_imu = 0
+            num_gps = 0
+            num_gt = 0
+
+            for meas in measurements
+                if meas isa GroundTruthMeasurement
+                    num_gt += 1
+                elseif meas isa CameraMeasurement
+                    num_cam += 1
+                elseif meas isa IMUMeasurement
+                    num_imu += 1
+                elseif meas isa GPSMeasurement
+                    num_gps += 1
+                end
             end
         end
-    end
+        if collect_buffer 
+            jldsave("message_buff.jld2"; msg_buf)
+            @info "Message buffer saved to message_buff.jld2"
+        end
+    end)
     
     target_velocity = 0.0
     steering_angle = 0.0
